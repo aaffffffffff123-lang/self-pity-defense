@@ -216,7 +216,7 @@ const isMobile=/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
 // The play field is framed tightly: the lower part of the door at the top edge, the eyes on top of
 // the item bar, and the placeable floor across the room's width at the depth where placing starts.
 const camView={w:1,h:1,play:1}, eyeV=new V3(), eyePts=[];
-const FRAME_DOOR_H=0.42, FRAME_CAM_MAX_Y=1.45, FRAME_SIDE_X=1.3, FRAME_TOP_PX=8, FRAME_SIDE_PX=4;
+const FRAME_DOOR_H=0.5, FRAME_CAM_MAX_Y=1.45, FRAME_SIDE_X=1.3, FRAME_TOP_PX=8, FRAME_SIDE_PX=4;
 function barTopPx(){ const b=document.getElementById('bar'), c=b&&b.firstElementChild; return c? b.offsetTop+c.offsetTop : window.innerHeight; }
 function setProj(playH){ camera.aspect=camView.w/playH; camera.setViewOffset(camView.w,playH,0,0,camView.w,camView.h); }
 function scrY(x,y,z){ eyeV.set(x,y,z).project(camera); return (-eyeV.y*0.5+0.5)*camView.h; }
@@ -236,14 +236,15 @@ function aimEyes(fov){
   for(let i=0;i<22;i++){ const mid=(lo+hi)/2; camera.lookAt(0,mid,-2.0); if(eyeBottomPx()>camView.play) hi=mid; else lo=mid; }
   camera.lookAt(0,(lo+hi)/2,-2.0); camera.updateMatrixWorld(); return (lo+hi)/2;
 }
-function frameOk(){
+function frameOk(sides){
   const zs=ROOM.z0+DOOR_KEEPOUT;
-  return scrY(0,FRAME_DOOR_H,ROOM.z0)>=FRAME_TOP_PX && scrX(-FRAME_SIDE_X,0,zs)>=FRAME_SIDE_PX && scrX(FRAME_SIDE_X,0,zs)<=camView.w-FRAME_SIDE_PX;
+  if(scrY(0,FRAME_DOOR_H,ROOM.z0)<FRAME_TOP_PX) return false;
+  return !sides || (scrX(-FRAME_SIDE_X,0,zs)>=FRAME_SIDE_PX && scrX(FRAME_SIDE_X,0,zs)<=camView.w-FRAME_SIDE_PX);
 }
-function fitFov(camY,camZ){
-  // Narrowest view that still shows the door and the floor's full width, with the eyes pinned to the bar.
+function fitFov(camY,camZ,sides=true){
+  // Narrowest view that still shows the door (and, if asked, the floor's width), with the eyes pinned to the bar.
   camera.position.set(0,camY,camZ); let flo=20, fhi=120;
-  for(let j=0;j<16;j++){ const fm=(flo+fhi)/2; aimEyes(fm); if(frameOk()) fhi=fm; else flo=fm; }
+  for(let j=0;j<16;j++){ const fm=(flo+fhi)/2; aimEyes(fm); if(frameOk(sides)) fhi=fm; else flo=fm; }
   return fhi;
 }
 function layoutCamera(){
@@ -261,6 +262,8 @@ function layoutCamera(){
     let ylo=camY, yhi=Math.max(camY,FRAME_CAM_MAX_Y);
     fitFov(yhi,camZ); if(scrY(0,FRAME_DOOR_H,ROOM.z0)>FRAME_TOP_PX+2){ camY=yhi; } else { for(let k=0;k<12;k++){ const ym=(ylo+yhi)/2; fitFov(ym,camZ); if(scrY(0,FRAME_DOOR_H,ROOM.z0)>FRAME_TOP_PX+2) ylo=ym; else yhi=ym; } camY=yhi; }
     fov=fitFov(camY,camZ);
+    // Still empty wall above the door at the height limit: keep the door on the top edge and let the sides go.
+    if(scrY(0,FRAME_DOOR_H,ROOM.z0)>FRAME_TOP_PX+2) fov=fitFov(camY,camZ,false);
   }
   camBase.pos.set(0,camY,camZ); camBase.fov=fov; camBase.tgt.set(0,aimEyes(fov),-2.0);
   applyCamera();
@@ -771,6 +774,9 @@ function knockEnemy(e,fx,fz,pw){
 /* =========================================================
    FLOW FIELD
    ========================================================= */
+// Placed food is solid: the path map keeps TOWER_PATH_PAD clear around each one,
+// and walkers are pushed back out if they get closer than TOWER_BODY_PAD.
+const TOWER_PATH_PAD=0.06, TOWER_BODY_PAD=0.04;
 const FF=(()=>{
   const cell=0.08, x0=ROOM.x0, z0=ROOM.z0, nx=Math.ceil(RW/cell), nz=Math.ceil(RD/cell), N=nx*nz;
   const base=new Uint8Array(N), blocked=new Uint8Array(N), goal=new Uint8Array(N), dist=new Float32Array(N), dirx=new Float32Array(N), dirz=new Float32Array(N);
@@ -791,7 +797,7 @@ const FF=(()=>{
       if(bd>=1e9||(bx===0&&bz===0)){ if(goal[i]){ dirx[i]=0; dirz[i]=0; } else { const vx=-cx(i), vz=-cz(i); const l=Math.hypot(vx,vz)||1; dirx[i]=vx/l; dirz[i]=vz/l; } }
       else { const l=Math.hypot(bx,bz); dirx[i]=bx/l; dirz[i]=bz/l; } }
   }
-  function rebuild(towers){ blocked.set(base); for(const t of towers){ if(!t.blocks) continue; markCircle(t.x,t.z,t.food.foot+0.03,1); } compute(); }
+  function rebuild(towers){ blocked.set(base); for(const t of towers){ if(!t.blocks) continue; markCircle(t.x,t.z,t.food.foot+TOWER_PATH_PAD,1); } compute(); }
   function markCircle(x,z,r,v){ const ax=ix(x-r),bx=ix(x+r),az=iz(z-r),bz=iz(z+r); for(let a=ax;a<=bx;a++) for(let b=az;b<=bz;b++){ const i=b*nx+a; if(Math.hypot(cx(i)-x,cz(i)-z)<=r) blocked[i]=v; } }
   function dirAt(x,z,out){ const fx=(x-x0)/cell-0.5, fz=(z-z0)/cell-0.5; const ax=clamp(Math.floor(fx),0,nx-2), az=clamp(Math.floor(fz),0,nz-2); const tx=clamp(fx-ax,0,1), tz=clamp(fz-az,0,1);
     const i00=az*nx+ax, i10=i00+1, i01=i00+nx, i11=i01+1;
@@ -800,8 +806,10 @@ const FF=(()=>{
   function reachable(){ const i=iz(ROOM.z0+0.1)*nx+ix(0.2); return dist[i]<1e9; }
   function isBlocked(x,z){ return blocked[iz(z)*nx+ix(x)]===1; }
   function isBase(x,z){ return base[iz(z)*nx+ix(x)]===1; }
-  function testPlacement(x,z,r,towers){ blocked.set(base); for(const t of towers){ if(t.blocks) markCircle(t.x,t.z,t.food.foot+0.03,1); } markCircle(x,z,r+0.03,1); compute(); const ok=reachable(); return ok; }
-  return {rebuild,dirAt,reachable,isBlocked,isBase,testPlacement,cell,nx,nz};
+  function testPlacement(x,z,r,towers){ blocked.set(base); for(const t of towers){ if(t.blocks) markCircle(t.x,t.z,t.food.foot+TOWER_PATH_PAD,1); } markCircle(x,z,r+TOWER_PATH_PAD,1); compute(); const ok=reachable(); return ok; }
+  // True if this spot (or a cell right next to it) still has a way to the head.
+  function reachAt(x,z){ const cx0=ix(x), cz0=iz(z); for(let a=-1;a<=1;a++) for(let b=-1;b<=1;b++){ const X=cx0+a, Z=cz0+b; if(X<0||X>=nx||Z<0||Z>=nz) continue; if(dist[Z*nx+X]<1e9) return true; } return false; }
+  return {rebuild,dirAt,reachable,isBlocked,isBase,testPlacement,reachAt,cell,nx,nz};
 })();
 
 /* =========================================================
@@ -988,6 +996,15 @@ function startCry(){ drag=null; G.scene='cry'; CRY={t:0,dropped:[false,false]}; 
 
 /* ---------- enemy update ---------- */
 const dirTmp=[0,0];
+function pushOutOfTowers(e){
+  // Walkers shut in with no way to the head are let through, so a round can never get stuck.
+  if(!FF.reachAt(e.x,e.z)) return;
+  for(const t of towers){ if(!t.blocks) continue;
+    const r=t.food.foot+TOWER_BODY_PAD, dx=e.x-t.x, dz=e.z-t.z, d2=dx*dx+dz*dz; if(d2>=r*r) continue;
+    const d=Math.sqrt(d2), nx=d>1e-4?dx/d:1, nz=d>1e-4?dz/d:0;
+    e.x=t.x+nx*r; e.z=t.z+nz*r;
+    const vn=e.vx*nx+e.vz*nz; if(vn<0){ e.vx-=vn*nx; e.vz-=vn*nz; } }
+}
 function updEnemies(dt){
   shBuild();
   for(const e of EN.list){ e.sx=0; e.sz=0; if(e.state!=='walk'&&e.state!=='wander') continue;
@@ -995,7 +1012,7 @@ function updEnemies(dt){
   for(let i=EN.list.length-1;i>=0;i--){ const e=EN.list[i]; e.t+=dt;
     if(e.state==='walk'){
       FF.dirAt(e.x,e.z,dirTmp); let vx=dirTmp[0]*e.speed+e.sx, vz=dirTmp[1]*e.speed+e.sz; vx+=Math.sin(e.anim*0.3+e.seed)*e.speed*0.22;
-      const k=1-Math.pow(0.02,dt); e.vx+=(vx-e.vx)*k; e.vz+=(vz-e.vz)*k; e.x+=e.vx*dt; e.z+=e.vz*dt; e.x=clamp(e.x,ROOM.x0+0.03,ROOM.x1-0.03); e.z=clamp(e.z,ROOM.z0+0.02,ROOM.z1-0.03); e.y=groundY(e.x,e.z);
+      const k=1-Math.pow(0.02,dt); e.vx+=(vx-e.vx)*k; e.vz+=(vz-e.vz)*k; e.x+=e.vx*dt; e.z+=e.vz*dt; e.x=clamp(e.x,ROOM.x0+0.03,ROOM.x1-0.03); e.z=clamp(e.z,ROOM.z0+0.02,ROOM.z1-0.03); pushOutOfTowers(e); e.y=groundY(e.x,e.z);
       const sp=Math.hypot(e.vx,e.vz); e.anim+=dt*(sp*40+1.5); if(sp>0.02){ const ty=Math.atan2(e.vx,e.vz); let d=ty-e.yaw; d=Math.atan2(Math.sin(d),Math.cos(d)); e.yaw+=d*Math.min(1,dt*9); }
       if(inHeadZone(e.x,e.z,0.055)) startEnter(e);
     }
@@ -1003,7 +1020,7 @@ function updEnemies(dt){
     else if(e.state==='fly'){ e.x+=e.vx*dt; e.y+=e.vy*dt; e.z+=e.vz*dt; e.vy-=7.5*dt; e.rx+=e.vrx*dt; e.ry+=e.vry*dt; e.rz+=e.vrz*dt; e.x=clamp(e.x,ROOM.x0+0.03,ROOM.x1-0.03); e.z=clamp(e.z,ROOM.z0+0.02,ROOM.z1-0.03);
       const gy=groundY(e.x,e.z), hy=headSurfaceY(e.x,e.z); if(e.y<=Math.max(gy,hy)){ if(hy>gy){ e.y=hy; startEnter(e); } else { e.y=gy; e.state='walk'; e.vx*=0.2; e.vz*=0.2; e.yaw=e.ry; e.t=0; } } }
     else if(e.state==='leave'){ e.scale=Math.max(0,e.scale-dt*1.6); e.y=groundY(e.x,e.z)+(1-e.scale)*0.02; if(e.scale<=0.02) removeEnemy(e); }
-    else if(e.state==='wander'){ if(!e.tgt||e.t>rand(6,9)){ e.tgt=[rand(-1.3,1.3),rand(-3.2,-0.9)]; e.t=0; } let dx=e.tgt[0]-e.x, dz=e.tgt[1]-e.z; const d=Math.hypot(dx,dz); if(d<0.05){ e.tgt=null; continue; } dx/=d; dz/=d; const nx=e.x+(dx*e.speed+e.sx)*dt, nz=e.z+(dz*e.speed+e.sz)*dt; if(FF.isBase(nx,nz)){ e.tgt=null; continue; } e.vx=dx*e.speed; e.vz=dz*e.speed; e.x=nx; e.z=nz; e.y=groundY(e.x,e.z); e.anim+=dt*(e.speed*40+1.5); const ty=Math.atan2(e.vx,e.vz); let dd=ty-e.yaw; dd=Math.atan2(Math.sin(dd),Math.cos(dd)); e.yaw+=dd*Math.min(1,dt*6); }
+    else if(e.state==='wander'){ if(!e.tgt||e.t>rand(6,9)){ e.tgt=[rand(-1.3,1.3),rand(-3.2,-0.9)]; e.t=0; } let dx=e.tgt[0]-e.x, dz=e.tgt[1]-e.z; const d=Math.hypot(dx,dz); if(d<0.05){ e.tgt=null; continue; } dx/=d; dz/=d; const nx=e.x+(dx*e.speed+e.sx)*dt, nz=e.z+(dz*e.speed+e.sz)*dt; if(FF.isBase(nx,nz)){ e.tgt=null; continue; } e.vx=dx*e.speed; e.vz=dz*e.speed; e.x=nx; e.z=nz; pushOutOfTowers(e); e.y=groundY(e.x,e.z); e.anim+=dt*(e.speed*40+1.5); const ty=Math.atan2(e.vx,e.vz); let dd=ty-e.yaw; dd=Math.atan2(Math.sin(dd),Math.cos(dd)); e.yaw+=dd*Math.min(1,dt*6); }
   }
 }
 function updTowers(dt){

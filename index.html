@@ -23,7 +23,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 @keyframes fl{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-30px)}}
 #bar{position:absolute;left:0;right:0;bottom:0;padding:10px 6px calc(var(--sab) + 8px);display:flex;justify-content:center;align-items:flex-end;gap:5px;background:linear-gradient(to top,rgba(255,244,214,.97) 60%,rgba(255,244,214,0));pointer-events:none;transition:opacity .3s,transform .3s}
 #bar.off{opacity:0;transform:translateY(30px);pointer-events:none}
-.card{pointer-events:auto;width:min(13vw,92px);background:var(--paper);border-radius:12px;padding:5px 3px 4px;text-align:center;box-shadow:0 2px 0 rgba(90,60,0,.14);border:2px solid transparent;cursor:grab;transition:transform .12s,opacity .2s;position:relative}
+.card{pointer-events:auto;width:min(13vw,92px,16vh);background:var(--paper);border-radius:12px;padding:5px 3px 4px;text-align:center;box-shadow:0 2px 0 rgba(90,60,0,.14);border:2px solid transparent;cursor:grab;transition:transform .12s,opacity .2s;position:relative}
 .card img{width:76%;aspect-ratio:1;display:block;margin:0 auto;pointer-events:none}
 .card .nm{font-size:11px;font-weight:700;line-height:1.1;white-space:nowrap}
 .card .pr{font-size:11px;font-weight:900;color:var(--red);line-height:1.1;margin-top:2px}
@@ -42,7 +42,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 .btn{display:inline-block;background:var(--ink);color:#fff;font-weight:800;font-size:17px;padding:12px 28px;border-radius:14px;cursor:pointer;margin:4px 3px}
 .btn.alt{background:#fff;color:var(--ink);border:2px solid var(--ink)}
 .hide{display:none!important}
-@media (min-aspect-ratio:1/1){#bar{left:auto;right:18px;top:50%;bottom:auto;transform:translateY(-50%);width:auto;display:grid;grid-template-columns:repeat(2,86px);gap:6px;padding:0;background:none}#bar.off{transform:translate(60px,-50%)}.card{width:86px;padding:6px 3px 5px}.card .nm,.card .pr{font-size:12px}.card .am{font-size:11px}}
+ 
 #dayFade{position:absolute;inset:0;background:#13151e;opacity:0;pointer-events:none}
 #hudRound{font-size:17px;padding:8px 13px}
 .card .role{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--ink);color:white;border-radius:7px;padding:5px 8px;font-size:11px;white-space:nowrap;display:none;pointer-events:none}
@@ -184,24 +184,51 @@ const camBase={pos:new V3(0,0.95,0.3), tgt:new V3(0,0.05,-2.0), fov:80};
 const camCut={pos:new V3(0,2.3,1.85), tgt:new V3(0,0.0,-1.7), fov:80};
 let camMix=0, camShake=0, camShakeT=0;
 const isMobile=/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+
+
+// camView.play = height of the area above the item bar. The camera frames that area;
+// the strip behind the bar is rendered as an extension below it.
+const camView={w:1,h:1,play:1}, eyeV=new V3();
+function barTopPx(){ const b=document.getElementById('bar'), c=b&&b.firstElementChild; return c? b.offsetTop+c.offsetTop : window.innerHeight; }
+function setProj(playH){ camera.aspect=camView.w/playH; camera.setViewOffset(camView.w,playH,0,0,camView.w,camView.h); }
+function eyeBottomPx(){
+  camera.updateMatrixWorld(); let m=-1e9;
+  for(const E of GI.eyes){ const pos=E.mesh.geometry.attributes.position; E.mesh.updateWorldMatrix(true,false);
+    for(let i=0;i<pos.count;i++){ eyeV.fromBufferAttribute(pos,i).applyMatrix4(E.mesh.matrixWorld).project(camera); m=Math.max(m,(-eyeV.y*0.5+0.5)*camView.h); } }
+  return m;
+}
 function layoutCamera(){
-  const w=window.innerWidth, h=window.innerHeight, a=w/h;
-  const p=clamp((a-0.48)/(1.75-0.48),0,1);
-  // Original framing: only the eyes rise into the bottom of the play view.
-  camBase.fov=lerp(81,66,p);
+  const w=window.innerWidth, h=window.innerHeight;
+  camView.w=w; camView.h=h; camView.play=Math.max(120, barTopPx()-4);
+  renderer.setSize(w,h,false);
+  const a=w/camView.play, p=clamp((a-0.48)/(1.75-0.48),0,1);
+  camBase.fov=a>1.75? 2*Math.atan(Math.tan(33*Math.PI/180)*1.75/a)*180/Math.PI : lerp(81,66,p);
   camBase.pos.set(0,lerp(0.97,1.2,p),lerp(0.5,0.65,p));
-  camBase.tgt.set(0,lerp(0.04,0.11,p),-2.0);
-  camCut.fov=lerp(82,64,p); camCut.pos.set(0,lerp(2.30,2.60,p),lerp(2.25,2.75,p)); camCut.tgt.set(0,0.50,-1.45);
-  camera.aspect=a; renderer.setSize(w,h,false); applyCamera();
+  const pc=clamp((w/h-0.48)/(1.75-0.48),0,1);
+  camCut.fov=lerp(82,64,pc); camCut.pos.set(0,lerp(2.30,2.60,pc),lerp(2.25,2.75,pc)); camCut.tgt.set(0,0.50,-1.45);
+  // Tilt the play camera until the lower edge of the eyes sits right on top of the item bar.
+  // If that pushes the top of the door frame off the screen, widen the view until it fits.
+  setProj(camView.play); camera.position.copy(camBase.pos);
+  const topY=8;
+  const aimEyes=fov=>{ camera.fov=fov; camera.updateProjectionMatrix(); let lo=-3, hi=1.5;
+    for(let i=0;i<26;i++){ const mid=(lo+hi)/2; camera.lookAt(0,mid,-2.0); if(eyeBottomPx()>camView.play) hi=mid; else lo=mid; }
+    camera.lookAt(0,(lo+hi)/2,-2.0); camera.updateMatrixWorld(); return (lo+hi)/2; };
+  const doorTopY=()=>{ eyeV.set(0,CFG.DOOR.h+0.075,ROOM.z0-0.035).project(camera); return (-eyeV.y*0.5+0.5)*camView.h; };
+  let ty=aimEyes(camBase.fov);
+  if(doorTopY()<topY){ let flo=camBase.fov, fhi=110;
+    for(let j=0;j<16;j++){ const fm=(flo+fhi)/2; aimEyes(fm); if(doorTopY()<topY) flo=fm; else fhi=fm; }
+    camBase.fov=fhi; ty=aimEyes(fhi); }
+  camBase.tgt.set(0,ty,-2.0);
+  applyCamera();
 }
 function applyCamera(){
   const k=ease(clamp(camMix,0,1));
-  camera.fov=lerp(camBase.fov,camCut.fov,k); camera.updateProjectionMatrix();
+  camera.fov=lerp(camBase.fov,camCut.fov,k); setProj(lerp(camView.play,camView.h,k));
   tmpV.lerpVectors(camBase.pos,camCut.pos,k); tmpV2.lerpVectors(camBase.tgt,camCut.tgt,k);
   if(camShake>0.0005){ tmpV.x+=rand(-camShake,camShake); tmpV.y+=rand(-camShake,camShake)*0.6; }
   camera.position.copy(tmpV); camera.lookAt(tmpV2);
 }
-window.addEventListener('resize', layoutCamera);
+
 const hemi=new THREE.HemisphereLight(0xFFFFFF,0xE7C77A,0.9); scene.add(hemi);
 const amb=new THREE.AmbientLight(0xFFFFFF,0.28); scene.add(amb);
 const sun=new THREE.DirectionalLight(0xFFF7E6,2.0); sun.position.set(1.5,3.4,1.3); sun.target.position.set(0,0,-1.0); scene.add(sun); scene.add(sun.target);
@@ -520,7 +547,7 @@ function makeGiant(){
 const GI=makeGiant(); scene.add(GI.root);
 // world ellipsoid of the lying head
 const HEADW={c:new V3(0,0.17,0),r:new V3(HR[0],HR[2],HR[1])};
-function updHeadW(){ HEADW.r.set(HR[0]*(1+0.09*GI.fat),HR[2]*(1+0.05*GI.fat),HR[1]); }
+ function updHeadW(){ HEADW.r.set(HR[0]*(1+0.09*GI.fat),HR[2]*(1+0.05*GI.fat),HR[1]); layoutCamera(); }
 function inHeadZone(x,z,pad){ pad=pad===undefined?0.05:pad; const dx=x/(HEADW.r.x+pad), dz=z/(HEADW.r.z+pad); return dx*dx+dz*dz<1; }
 function headSurfaceY(x,z){ const dx=x/HEADW.r.x, dz=z/HEADW.r.z; const k=1-dx*dx-dz*dz; if(k<=0) return -1; return HEADW.c.y+HEADW.r.y*Math.sqrt(k); }
 function headNormalAt(u,out){ return (out||new V3()).set(u.x/HEADW.r.x,u.y/HEADW.r.y,u.z/HEADW.r.z).normalize(); }
@@ -1135,7 +1162,7 @@ function render(now){
 }
 function frame(now){ const dt=Math.min(0.05,(now-last)/1000); last=now; step(dt); render(now); requestAnimationFrame(frame); }
 async function boot(){
-  layoutCamera(); paintFloorBase(); updHeadW(); FF.rebuild(towers); buildBar(); updateHUD(); showBar(false); try{ renderer.compile(scene,camera); }catch(e){}
+  paintFloorBase(); FF.rebuild(towers); buildBar(); updHeadW(); new ResizeObserver(()=>layoutCamera()).observe(barEl); updateHUD(); showBar(false); try{ renderer.compile(scene,camera); }catch(e){}
   try{ await Promise.race([document.fonts.load("900 20px 'Noto Sans KR'"), new Promise(r=>setTimeout(r,1200))]); }catch(e){}
   setThumbs();
   for(let i=0;i<4;i++){ const e=spawnEnemy({x:rand(-1.2,1.2),z:rand(-3.0,-1.2),state:'wander',speed:0.12}); }

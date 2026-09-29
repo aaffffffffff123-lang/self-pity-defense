@@ -74,6 +74,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 <div id="app">
 <canvas id="gl"></canvas>
 <div id="dayFade"></div>
+
 <div id="hud">
   <div class="pill" id="hudRound">1일째</div>
   <div class="pill" id="hudMoney">0원</div>
@@ -189,6 +190,7 @@ const SFX={
   coin(){ tn({type:'triangle',f:1318,g:0.14,dur:0.12}); tn({type:'triangle',f:1760,g:0.14,dur:0.3,when:0.07}); },
   step(){ nz({type:'lowpass',f:600,f2:200,g:0.14,dur:0.08}); },
   click(){ tn({type:'triangle',f:900,f2:600,g:0.1,dur:0.06}); },
+
   patter(v){ nz({type:'bandpass',f:rand(1200,2600),q:1.5,g:v,dur:0.02}); },
   setMurmur(v){ if(!AC||!murmurG) return; murmurG.gain.setTargetAtTime(v,AC.currentTime,0.25); },
 };
@@ -539,11 +541,29 @@ function drawEye(E, st){
 }
 function makeGiant(){
   const root=new THREE.Group(); root.name='giant';
-  const legGeo=new THREE.CapsuleGeometry(0.075,0.66,4,14); legGeo.translate(0,-0.405,0);
-  const legL=mesh(legGeo,M.pants,-0.105,0,0), legR=mesh(legGeo,M.pants,0.105,0,0); root.add(legL,legR);
-  for(const l of [legL,legR]){ const sh=mesh(new THREE.BoxGeometry(0.14,0.07,0.26),M.shoe,0,-0.8,0.06); l.add(sh); }
+  // Hips join the belly to the legs. Each leg bends at a knee and ends in a sneaker whose sole
+  // sits exactly LEG_H below the hip, so standing on any floor height keeps the feet grounded.
+  const LEG_H=0.84;
+  const lathe=points=>new THREE.LatheGeometry(points.map(p=>new THREE.Vector2(p[0],p[1])),20);
+  const hips=ellipsoid(0.205,0.11,0.145,M.pants,22); hips.position.set(0,0.02,0); root.add(hips);
+  const thighGeo=lathe([[0,-0.42],[0.062,-0.415],[0.068,-0.38],[0.074,-0.28],[0.081,-0.16],[0.086,-0.05],[0.082,0.03],[0,0.06]]);
+  const shinGeo=lathe([[0,-0.40],[0.044,-0.395],[0.047,-0.34],[0.058,-0.24],[0.064,-0.14],[0.064,-0.05],[0.06,0.02],[0,0.045]]);
+  function makeLeg(side){
+    const leg=new THREE.Group(); leg.position.set(side*0.098,0,0); root.add(leg);
+    const thigh=mesh(thighGeo,M.pants); thigh.scale.z=0.94; leg.add(thigh);
+    const knee=new THREE.Group(); knee.position.y=-0.40; leg.add(knee);
+    knee.add(ellipsoid(0.066,0.07,0.064,M.pants,16));
+    const shin=mesh(shinGeo,M.pants); shin.scale.z=0.94; knee.add(shin);
+    const ankle=new THREE.Group(); ankle.position.y=-0.38; knee.add(ankle);
+    const upper=ellipsoid(0.056,0.052,0.118,M.shoe,18); upper.position.set(0,-0.02,0.045); ankle.add(upper);
+    const sole=ellipsoid(0.06,0.016,0.124,M.white,18); sole.position.set(0,-0.044,0.045); ankle.add(sole);
+    return {leg,knee};
+  }
+  const legLeft=makeLeg(-1), legRight=makeLeg(1);
+  const legL=legLeft.leg, legR=legRight.leg, kneeL=legLeft.knee, kneeR=legRight.knee;
   const torso=mesh(new THREE.CapsuleGeometry(0.19,0.22,5,16),M.tee,0,0.3,0); torso.scale.set(1.12,1,0.78); root.add(torso);
   const belly=mesh(new THREE.SphereGeometry(0.2,18,14),M.tee,0,0.16,0.06); belly.scale.set(1,0.75,0.55); root.add(belly);
+  const yoke=ellipsoid(0.215,0.07,0.125,M.tee,22); yoke.position.set(0,0.445,-0.004); root.add(yoke);
   // Soft sleeve caps overlap the torso; each arm bends at a covered elbow.
   // Profiles narrow through the wrist instead of continuing as rigid rods.
   const armShape=points=>new THREE.LatheGeometry(points.map(p=>new THREE.Vector2(p[0],p[1])),20);
@@ -552,14 +572,14 @@ function makeGiant(){
   const forearmGeo=armShape([[0,-0.25],[0.022,-0.242],[0.024,-0.204],[0.029,-0.162],[0.036,-0.103],[0.039,-0.06],[0.035,-0.012],[0.026,0.018],[0,0.03]]);
   function makeArm(side){
     const a=new THREE.Group(); a.position.set(side*0.185,0.465,-0.002); root.add(a);
-    const upper=mesh(upperArmGeo,M.skin); upper.scale.z=0.92; a.add(upper);
-    const sleeve=mesh(sleeveGeo,M.tee,0,-0.001,0); sleeve.scale.z=0.95; a.add(sleeve);
+    const upper=mesh(upperArmGeo,M.skin); upper.scale.set(1.24,1,1.14); a.add(upper);
+    const sleeve=mesh(sleeveGeo,M.tee,0,-0.001,0); sleeve.scale.set(0.88,1.0,0.92); a.add(sleeve);
     const elbow=new THREE.Group(); elbow.position.y=-0.265; a.add(elbow);
-    const joint=ellipsoid(0.033,0.037,0.031,M.skin,16); elbow.add(joint);
-    const forearm=mesh(forearmGeo,M.skin); forearm.scale.z=0.89; elbow.add(forearm);
+    const joint=ellipsoid(0.04,0.044,0.037,M.skin,16); elbow.add(joint);
+    const forearm=mesh(forearmGeo,M.skin); forearm.scale.set(1.22,1,1.08); elbow.add(forearm);
     const hand=new THREE.Group(); hand.position.set(0,-0.249,0.004); hand.rotation.set(-0.08,side*0.09,side*0.1); elbow.add(hand);
-    const palm=ellipsoid(0.031,0.044,0.022,M.skin,18); palm.position.y=-0.018; hand.add(palm);
-    const thumb=ellipsoid(0.013,0.025,0.016,M.skin,14); thumb.position.set(-side*0.024,-0.009,0.008); thumb.rotation.z=-side*0.38; hand.add(thumb);
+    const palm=ellipsoid(0.036,0.05,0.026,M.skin,18); palm.position.y=-0.018; hand.add(palm);
+    const thumb=ellipsoid(0.015,0.028,0.018,M.skin,14); thumb.position.set(-side*0.024,-0.009,0.008); thumb.rotation.z=-side*0.38; hand.add(thumb);
     return {arm:a,elbow};
   }
   const leftArm=makeArm(-1),rightArm=makeArm(1);
@@ -581,16 +601,24 @@ function makeGiant(){
   const splay=new THREE.Group(); headG.add(splay);
   for(let i=0;i<7;i++){ const a=0.25+i*(Math.PI-0.5)/6; const dir=new V3(Math.cos(a),Math.sin(a),-0.5).normalize(); const p=new V3(dir.x*HR[0],dir.y*HR[1],dir.z*HR[2]).multiplyScalar(1.02+((i*7)%3)*0.12); const e=ellipsoid(0.022+((i*5)%3)*0.006,0.085+((i*3)%4)*0.02,0.012,M.hair,10); e.position.copy(p); e.rotation.z=a-Math.PI/2; splay.add(e); }
   const workGear=new THREE.Group(); root.add(workGear); workGear.visible=false;
-  const bagM=std(0x6E746C,{roughness:0.95}), strapM=std(0x454C46,{roughness:0.95});
-  workGear.add(mesh(roundedBox(0.24,0.28,0.11,0.025,3),bagM,-0.30,-0.15,-0.025));
-  const strapPath=new THREE.CatmullRomCurve3([new V3(-0.3,0.11,0.08),new V3(-0.25,0.44,0.07),new V3(0.15,0.52,0.16),new V3(0.21,0.39,0.20),new V3(-0.30,0.06,0.10)]); workGear.add(mesh(new THREE.TubeGeometry(strapPath,22,0.017,5,false),strapM,0,0,0));
-  const lanyard=new THREE.CatmullRomCurve3([new V3(-0.065,0.57,0.07),new V3(-0.078,0.39,0.18),new V3(0,0.28,0.18),new V3(0.078,0.39,0.18),new V3(0.065,0.57,0.07)]); workGear.add(mesh(new THREE.TubeGeometry(lanyard,24,0.007,5,false),std(0xA84335),0,0,0));
-  workGear.add(mesh(new THREE.BoxGeometry(0.09,0.125,0.012),M.white,0,0.22,0.20)); workGear.add(mesh(new THREE.BoxGeometry(0.033,0.041,0.004),std(0x6684A5),-0.018,0.241,0.208));
-  for(let j=0;j<3;j++) workGear.add(mesh(new THREE.BoxGeometry(0.055,0.005,0.004),std(0x818580),0,0.217-j*0.012,0.208));
-  const GI={root,legL,legR,armL,armR,elbowL,elbowR,torso,belly,headG,skull,cheeks,eyes,splay,workGear,fat:0,lying:true};
-  GI.setFat=f=>{ GI.fat=f; headG.scale.set(1+0.09*f,1,1+0.05*f); for(const c of cheeks){ const s=0.3+1.7*f; c.scale.set(0.045*s,0.04*s,0.045*s); } belly.scale.set(1+0.45*f,0.75+0.35*f,0.55+0.75*f); belly.position.z=0.06+0.06*f; torso.scale.set(1.12+0.22*f,1,0.78+0.2*f); armL.position.x=-(0.185+0.035*f); armR.position.x=0.185+0.035*f; };
-  GI.lie=()=>{ root.visible=true; workGear.visible=false; root.rotation.set(-Math.PI/2,0,0); root.position.set(0,0.17,0.735); legL.rotation.set(0,0,0.04); legR.rotation.set(0,0,-0.04); armL.rotation.set(-0.08,0,-0.24); armR.rotation.set(-0.08,0,0.24); elbowL.rotation.set(-0.10,0,0.04); elbowR.rotation.set(-0.10,0,-0.04); splay.visible=true; GI.lying=true; };
-  GI.stand=(x,z,yaw)=>{ root.rotation.set(0,yaw,0); root.position.set(x,0.86,z); legL.rotation.set(0,0,0); legR.rotation.set(0,0,0); armL.rotation.set(0.03,0,-(0.17+GI.fat*0.1)); armR.rotation.set(0.03,0,0.17+GI.fat*0.1); elbowL.rotation.set(-0.18,0,0.04); elbowR.rotation.set(-0.18,0,-0.04); splay.visible=false; GI.lying=false; };
+  // Backpack worn on the back; two shoulder straps show from the front.
+  const packM=std(0x2E3A4C,{roughness:0.9}), packD=std(0x1F2835,{roughness:0.9}), zipM=std(0xB9C0C8,{roughness:0.4,metalness:0.3}), strapM=std(0x51647F,{roughness:0.85});
+  const pack=new THREE.Group(); workGear.add(pack);
+  pack.add(mesh(roundedBox(0.30,0.40,0.13,0.06,4),packM,0,0.10,-0.065));
+  pack.add(mesh(roundedBox(0.22,0.17,0.06,0.04,3),packD,0,0.12,-0.155));
+  const zip=mesh(new THREE.TorusGeometry(0.105,0.004,5,24,Math.PI),zipM,0,0.40,-0.066); zip.scale.set(1.25,0.6,1); pack.add(zip);
+  pack.add(mesh(new THREE.BoxGeometry(0.012,0.03,0.006),zipM,0.1,0.30,-0.189));
+  pack.add(mesh(new THREE.TorusGeometry(0.035,0.009,6,14,Math.PI),packD,0,0.50,-0.07));
+  for(const sd of [-1,1]){
+    const path=new THREE.CatmullRomCurve3([new V3(sd*0.085,0.44,-0.02),new V3(sd*0.105,0.53,0.04),new V3(sd*0.13,0.49,0.15),new V3(sd*0.15,0.34,0.175),new V3(sd*0.19,0.20,0.10),new V3(sd*0.13,0.14,-0.02)]);
+    workGear.add(mesh(new THREE.TubeGeometry(path,26,0.018,6,false),strapM,0,0,0));
+    const buckle=mesh(new THREE.BoxGeometry(0.03,0.02,0.01),zipM,sd*0.152,0.30,0.178); buckle.rotation.z=sd*0.25; workGear.add(buckle);
+  }
+  const GI={root,legL,legR,kneeL,kneeR,armL,armR,elbowL,elbowR,torso,belly,yoke,headG,skull,cheeks,eyes,splay,workGear,pack,LEG_H,baseY:LEG_H,fat:0,lying:true};
+  GI.armOut=()=>0.12+GI.fat*0.13;
+  GI.setFat=f=>{ GI.fat=f; headG.scale.set(1+0.09*f,1,1+0.05*f); for(const c of cheeks){ const s=0.3+1.7*f; c.scale.set(0.045*s,0.04*s,0.045*s); } belly.scale.set(1+0.45*f,0.75+0.35*f,0.55+0.75*f); belly.position.z=0.06+0.06*f; torso.scale.set(1.12+0.22*f,1,0.78+0.2*f); yoke.scale.set(0.215*(1+0.2*f),0.07,0.125*(1+0.25*f)); pack.position.z=-0.148*(1+0.26*f); armL.position.x=-(0.185+0.035*f); armR.position.x=0.185+0.035*f; };
+  GI.lie=()=>{ root.visible=true; workGear.visible=false; root.rotation.set(-Math.PI/2,0,0); root.position.set(0,0.17,0.735); legL.rotation.set(0,0,0.04); legR.rotation.set(0,0,-0.04); kneeL.rotation.set(0,0,0); kneeR.rotation.set(0,0,0); armL.rotation.set(-0.08,0,-0.24); armR.rotation.set(-0.08,0,0.24); elbowL.rotation.set(-0.10,0,0.04); elbowR.rotation.set(-0.10,0,-0.04); splay.visible=true; GI.lying=true; };
+  GI.stand=(x,z,yaw)=>{ root.rotation.set(0,yaw,0); root.position.set(x,0.86,z); legL.rotation.set(0,0,0); legR.rotation.set(0,0,0); armL.rotation.set(0.03,0,-(GI.armOut())); armR.rotation.set(0.03,0,GI.armOut()); elbowL.rotation.set(-0.18,0,0.04); elbowR.rotation.set(-0.18,0,-0.04); splay.visible=false; GI.lying=false; };
   GI.walkPose=(ph,k)=>{ const s=Math.sin(ph*0.55),lag=Math.sin(ph*0.55-0.48); legL.rotation.x=s*0.30*k; legR.rotation.x=-s*0.30*k; armL.rotation.x=0.03-lag*0.115*k; armR.rotation.x=0.03+lag*0.115*k; elbowL.rotation.x=-0.18+Math.sin(ph*0.55-0.9)*0.025*k; elbowR.rotation.x=-0.18-Math.sin(ph*0.55-0.9)*0.025*k; root.position.y=0.86+Math.abs(s)*0.007*k; };
   GI.setFat(0); GI.lie();
   return GI;
@@ -1055,12 +1083,21 @@ function updPlay(dt){
 }
 
 /* ---------- cutscene (출근) ---------- */
-const CUT_T={rise:0.85,turn:1.15,walkEnd:3.1,exit:3.65,back:5.45,inEnd:7.90,lieEnd:8.65};
+const CUT_T={rise:0.85,turn:1.15,walkEnd:3.1,exit:3.65,back:8.65,inEnd:11.10,lieEnd:11.85};
 function resetCommuteVisual(){
   const fade=$('dayFade'); if(fade) fade.style.opacity=0;
   windowPane.material.color.setHex(0x22346A); windowMoon.visible=true;
   clockHour.rotation.z=-23*Math.PI/6; clockMinute.rotation.z=0;
   GI.root.visible=true; GI.workGear.visible=false;
+}
+// While the big one is away, one small self scurries across the dark room.
+function updCameo(c,k,dt){
+  const a=0.18, b=0.86;
+  if(k<a||k>b||c.cameoDone){ if(c.cameo){ removeEnemy(c.cameo); c.cameo=null; } if(k>b) c.cameoDone=true; return; }
+  if(!c.cameo){ c.cameo=spawnEnemy({x:-1.55,z:-0.62,state:'walk',speed:0.2}); if(!c.cameo) return; }
+  const e=c.cameo, u=(k-a)/(b-a);
+  e.x=lerp(-1.55,1.55,u); e.z=-0.62+Math.sin(u*Math.PI*2)*0.04; e.y=groundY(e.x,e.z); e.yaw=Math.PI/2; e.anim+=dt*40;
+  if(Math.random()<dt*1.3) SFX.sniff(0.035);
 }
 function cutPay(){ if(!CUT||CUT.paid) return; CUT.paid=true; G.money+=CFG.WAGE; SFX.coin(); floatMoney('+'+won(CFG.WAGE),'plus'); hudDirty=true; }
 function updCut(dt){
@@ -1069,7 +1106,7 @@ function updCut(dt){
   const lieP=new V3(0,0.17,0.735), standP=new V3(0,0.86,0.91);
   if(t<T.rise){
     const k=easeOut(t/T.rise); GI.root.rotation.set(lerp(-Math.PI/2,0,k),0,0); GI.root.position.lerpVectors(lieP,standP,k);
-    GI.legL.rotation.set(0,0,0.04*(1-k)); GI.legR.rotation.set(0,0,-0.04*(1-k)); GI.armL.rotation.set(lerp(-0.08,0.03,k),0,-lerp(0.24,0.17+GI.fat*0.1,k)); GI.armR.rotation.set(lerp(-0.08,0.03,k),0,lerp(0.24,0.17+GI.fat*0.1,k)); GI.elbowL.rotation.set(lerp(-0.10,-0.18,k),0,0.04); GI.elbowR.rotation.set(lerp(-0.10,-0.18,k),0,-0.04);
+    GI.legL.rotation.set(0,0,0.04*(1-k)); GI.legR.rotation.set(0,0,-0.04*(1-k)); GI.armL.rotation.set(lerp(-0.08,0.03,k),0,-lerp(0.24,GI.armOut(),k)); GI.armR.rotation.set(lerp(-0.08,0.03,k),0,lerp(0.24,GI.armOut(),k)); GI.elbowL.rotation.set(lerp(-0.10,-0.18,k),0,0.04); GI.elbowR.rotation.set(lerp(-0.10,-0.18,k),0,-0.04);
     GI.splay.visible=k<0.3; GI.lying=false; GI.workGear.visible=k>0.86;
   } else if(t<T.turn){
     GI.workGear.visible=true; const k=(t-T.rise)/(T.turn-T.rise); GI.stand(standP.x,standP.z,Math.PI*easeOut(k));
@@ -1081,12 +1118,16 @@ function updCut(dt){
   } else if(t<T.back){
     GI.root.visible=false;
     if(!c.doorClosed){ c.doorClosed=true; doorTarget=0; SFX.doorClose(); G.round++; hudDirty=true; G.fat=Math.min(1,G.round*0.13); GI.setFat(G.fat); updHeadW(); }
-    const k=clamp((t-T.exit)/(T.back-T.exit),0,1), hours=9*ease(k);
+    // Away at work: the room stays dim for a while; the clock and window run through the night.
+    const k=clamp((t-T.exit)/(T.back-T.exit),0,1), kw=clamp((k-0.1)/0.8,0,1), hours=9*ease(kw);
     clockHour.rotation.z=-(23+hours)*Math.PI/6; clockMinute.rotation.z=-hours*Math.PI*2;
-    windowPane.material.color.setHex(0x22346A).lerp(new THREE.Color(0xE5BD91),ease(k)); windowMoon.visible=k<0.6;
-    const fade=$('dayFade'); if(fade) fade.style.opacity=0.62*Math.pow(Math.sin(Math.PI*k),2);
+    windowPane.material.color.setHex(0x22346A).lerp(new THREE.Color(0xE5BD91),ease(kw)); windowMoon.visible=kw<0.6;
+    const cover=clamp(Math.min(k/0.15,(1-k)/0.15),0,1);
+    const fade=$('dayFade'); if(fade) fade.style.opacity=0.6*cover;
+    updCameo(c,k,dt);
   } else if(t<T.inEnd){
     const fade=$('dayFade'); if(fade) fade.style.opacity=0;
+    if(c.cameo){ removeEnemy(c.cameo); c.cameo=null; }
     if(!c.reopened){ c.reopened=true; doorTarget=1.48; SFX.door(); }
     const k=clamp((t-T.back-0.20)/(T.inEnd-T.back-0.20),0,1); GI.root.visible=true;
     GI.stand(lerp(0.10,0,k),lerp(-4.75,standP.z,k),0); c.walkPh+=dt*12; GI.walkPose(c.walkPh,k<0.97?0.80:0);
@@ -1095,11 +1136,12 @@ function updCut(dt){
   } else if(t<T.lieEnd){
     const k=easeOut((t-T.inEnd)/(T.lieEnd-T.inEnd)); GI.workGear.visible=false;
     GI.root.rotation.set(lerp(0,-Math.PI/2,k),0,0); GI.root.position.lerpVectors(standP,lieP,k);
-    GI.legL.rotation.set(0,0,0.04*k); GI.legR.rotation.set(0,0,-0.04*k); GI.armL.rotation.set(lerp(0.03,-0.08,k),0,-lerp(0.17+GI.fat*0.1,0.24,k)); GI.armR.rotation.set(lerp(0.03,-0.08,k),0,lerp(0.17+GI.fat*0.1,0.24,k)); GI.elbowL.rotation.set(lerp(-0.18,-0.10,k),0,0.04); GI.elbowR.rotation.set(lerp(-0.18,-0.10,k),0,-0.04); GI.splay.visible=k>0.8;
+    GI.legL.rotation.set(0,0,0.04*k); GI.legR.rotation.set(0,0,-0.04*k); GI.armL.rotation.set(lerp(0.03,-0.08,k),0,-lerp(GI.armOut(),0.24,k)); GI.armR.rotation.set(lerp(0.03,-0.08,k),0,lerp(GI.armOut(),0.24,k)); GI.elbowL.rotation.set(lerp(-0.18,-0.10,k),0,0.04); GI.elbowR.rotation.set(lerp(-0.18,-0.10,k),0,-0.04); GI.splay.visible=k>0.8;
   } else finishCut();
 }
 function finishCut(){
   if(!CUT) return;
+  if(CUT.cameo){ removeEnemy(CUT.cameo); CUT.cameo=null; }
   if(!CUT.doorClosed){ G.round++; G.fat=Math.min(1,G.round*0.13); GI.setFat(G.fat); updHeadW(); }
   cutPay(); resetCommuteVisual(); GI.lie(); camMix=0; doorTarget=DOOR_GAP;
   hudDirty=true; CUT=null; startRound(G.round);

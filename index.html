@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥲</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@500;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@500;700;900&display=swap" rel="stylesheet">
 <style>
 :root{--ink:#24201E;--cream:#FFF4D6;--red:#E23744;--blue:#2F6BFF;--paper:#FFFFFF;--sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -49,6 +49,17 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 .card .role{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--ink);color:white;border-radius:7px;padding:5px 8px;font-size:11px;white-space:nowrap;display:none;pointer-events:none}
 .card.sel .role{display:block}
 #bar.off .card{pointer-events:none}
+.titleBox{background:none;box-shadow:none;padding:0 0 10px;display:flex;flex-direction:column;align-items:center}
+.logo{display:block;width:min(92vw,470px,70vh);height:auto;overflow:visible;margin:0 auto 6px;animation:lgPop .7s cubic-bezier(.2,1.6,.4,1) both,lgFloat 3.2s ease-in-out .7s infinite;filter:drop-shadow(0 6px 0 rgba(36,32,30,.18))}
+.logo .lgBurst{transform-box:fill-box;transform-origin:center;animation:lgSpin 24s linear infinite}
+.logo .lgTear{animation:lgDrip 2.6s ease-in infinite}
+.logo .lgSpark{animation:lgTw 1.6s ease-in-out infinite alternate}
+@keyframes lgPop{0%{transform:scale(.3) rotate(-8deg);opacity:0}100%{transform:none;opacity:1}}
+@keyframes lgFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes lgSpin{to{transform:rotate(360deg)}}
+@keyframes lgDrip{0%,35%{transform:translateY(0);opacity:1}80%{transform:translateY(46px);opacity:1}100%{transform:translateY(58px);opacity:0}}
+@keyframes lgTw{from{opacity:.35}to{opacity:1}}
+.titleBox .btn{font-size:21px;padding:13px 40px;border-radius:16px;box-shadow:0 5px 0 rgba(36,32,30,.35)}
 .speech{border:1px solid rgba(36,32,30,.16);background:#fff;box-shadow:0 2px 0 rgba(36,32,30,.08);padding:4px 9px!important;max-width:calc(100vw - 24px)}
 .speech::after{content:"";position:absolute;left:var(--tail,50%);top:100%;margin-left:-5px;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid #fff;filter:drop-shadow(0 1px 0 rgba(36,32,30,.18))}
 .box h1{margin-bottom:20px}
@@ -113,7 +124,14 @@ function markHint(k){ seenHints[k]=1; try{ localStorage.setItem('spd3_hints',JSO
    AUDIO
    ========================================================= */
 let AC=null, master=null, noiseBuf=null, murmurG=null, murmurSrc=null;
+// Korean speech for the "또르르" line (browser voice).
+const TTS={ ok:'speechSynthesis' in window, voice:null, unlocked:false,
+  pick(){ if(!this.ok) return; const vs=speechSynthesis.getVoices(); this.voice=vs.find(v=>/^ko/i.test(v.lang)&&/Google|Yuna|유나|SunHi|Heami/i.test(v.name))||vs.find(v=>/^ko/i.test(v.lang))||null; },
+  unlock(){ if(!this.ok||this.unlocked) return; this.unlocked=true; try{ const u=new SpeechSynthesisUtterance(' '); u.lang='ko-KR'; u.volume=0; speechSynthesis.speak(u); }catch(e){} },
+  say(text){ if(!this.ok) return; try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.lang='ko-KR'; if(this.voice) u.voice=this.voice; u.rate=0.75; u.pitch=1.3; u.volume=1; speechSynthesis.speak(u); }catch(e){} } };
+if(TTS.ok){ TTS.pick(); speechSynthesis.addEventListener('voiceschanged',()=>TTS.pick()); }
 function audioInit(){
+  TTS.unlock();
   try{
     if(AC){ if(AC.state==='suspended') AC.resume(); return; }
     AC=new (window.AudioContext||window.webkitAudioContext)();
@@ -187,45 +205,66 @@ let camMix=0, camShake=0, camShakeT=0;
 const isMobile=/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
 
 
+
+
 // camView.play = height of the area above the item bar. The camera frames that area;
 // the strip behind the bar is rendered as an extension below it.
-const camView={w:1,h:1,play:1}, eyeV=new V3();
+// The play field is framed tightly: the lower part of the door at the top edge, the eyes on top of
+// the item bar, and the placeable floor across the room's width at the depth where placing starts.
+const camView={w:1,h:1,play:1}, eyeV=new V3(), eyePts=[];
+const FRAME_DOOR_H=0.42, FRAME_CAM_MAX_Y=1.45, FRAME_SIDE_X=1.3, FRAME_TOP_PX=8, FRAME_SIDE_PX=4;
 function barTopPx(){ const b=document.getElementById('bar'), c=b&&b.firstElementChild; return c? b.offsetTop+c.offsetTop : window.innerHeight; }
 function setProj(playH){ camera.aspect=camView.w/playH; camera.setViewOffset(camView.w,playH,0,0,camView.w,camView.h); }
-function eyeBottomPx(){
-  camera.updateMatrixWorld(); let m=-1e9;
-  for(const E of GI.eyes){ const pos=E.mesh.geometry.attributes.position; E.mesh.updateWorldMatrix(true,false);
-    for(let i=0;i<pos.count;i++){ eyeV.fromBufferAttribute(pos,i).applyMatrix4(E.mesh.matrixWorld).project(camera); m=Math.max(m,(-eyeV.y*0.5+0.5)*camView.h); } }
-  return m;
+function scrY(x,y,z){ eyeV.set(x,y,z).project(camera); return (-eyeV.y*0.5+0.5)*camView.h; }
+function scrX(x,y,z){ eyeV.set(x,y,z).project(camera); return (eyeV.x*0.5+0.5)*camView.w; }
+function eyeBottomPx(){ camera.updateMatrixWorld(); let m=-1e9; for(const p of eyePts) m=Math.max(m,scrY(p.x,p.y,p.z)); return m; }
+function collectEyePts(){
+  // Measure the eyes in the lying pose, even if the figure is standing in the cut scene.
+  const R=GI.root, keepP=R.position.clone(), keepR=R.rotation.clone();
+  R.position.set(0,0.17,0.735); R.rotation.set(-Math.PI/2,0,0); R.updateMatrixWorld(true);
+  const all=[]; for(const E of GI.eyes){ const pos=E.mesh.geometry.attributes.position; for(let i=0;i<pos.count;i++) all.push(new V3().fromBufferAttribute(pos,i).applyMatrix4(E.mesh.matrixWorld)); }
+  R.position.copy(keepP); R.rotation.copy(keepR); R.updateMatrixWorld(true);
+  // The chin-side edge is the one that ends up lowest on screen.
+  all.sort((a,b)=>b.z-a.z); eyePts.length=0; for(let i=0;i<Math.min(120,all.length);i++) eyePts.push(all[i]);
+}
+function aimEyes(fov){
+  camera.fov=fov; camera.updateProjectionMatrix(); let lo=-20, hi=1.5;
+  for(let i=0;i<22;i++){ const mid=(lo+hi)/2; camera.lookAt(0,mid,-2.0); if(eyeBottomPx()>camView.play) hi=mid; else lo=mid; }
+  camera.lookAt(0,(lo+hi)/2,-2.0); camera.updateMatrixWorld(); return (lo+hi)/2;
+}
+function frameOk(){
+  const zs=ROOM.z0+DOOR_KEEPOUT;
+  return scrY(0,FRAME_DOOR_H,ROOM.z0)>=FRAME_TOP_PX && scrX(-FRAME_SIDE_X,0,zs)>=FRAME_SIDE_PX && scrX(FRAME_SIDE_X,0,zs)<=camView.w-FRAME_SIDE_PX;
+}
+function fitFov(camY,camZ){
+  // Narrowest view that still shows the door and the floor's full width, with the eyes pinned to the bar.
+  camera.position.set(0,camY,camZ); let flo=20, fhi=120;
+  for(let j=0;j<16;j++){ const fm=(flo+fhi)/2; aimEyes(fm); if(frameOk()) fhi=fm; else flo=fm; }
+  return fhi;
 }
 function layoutCamera(){
   const w=window.innerWidth, h=window.innerHeight;
   camView.w=w; camView.h=h; camView.play=Math.max(120, barTopPx()-4);
   renderer.setSize(w,h,false);
-  const a=w/camView.play, p=clamp((a-0.48)/(1.75-0.48),0,1);
-  camBase.fov=a>1.75? 2*Math.atan(Math.tan(33*Math.PI/180)*1.75/a)*180/Math.PI : lerp(81,66,p);
-  camBase.pos.set(0,lerp(0.97,1.2,p),lerp(0.5,0.65,p));
   const pc=clamp((w/h-0.48)/(1.75-0.48),0,1);
   camCut.fov=lerp(82,64,pc); camCut.pos.set(0,lerp(2.30,2.60,pc),lerp(2.25,2.75,pc)); camCut.tgt.set(0,0.50,-1.45);
-  // Tilt the play camera until the lower edge of the eyes sits right on top of the item bar.
-  // If that pushes the top of the door frame off the screen, widen the view until it fits.
-  // Always measure the eyes in the lying pose, even if the figure is standing in the cut scene.
-  const R=GI.root, keepP=R.position.clone(), keepR=R.rotation.clone();
-  R.position.set(0,0.17,0.735); R.rotation.set(-Math.PI/2,0,0);
-  setProj(camView.play); camera.position.copy(camBase.pos);
-  const topY=8;
-  const aimEyes=fov=>{ camera.fov=fov; camera.updateProjectionMatrix(); let lo=-3, hi=1.5;
-    for(let i=0;i<26;i++){ const mid=(lo+hi)/2; camera.lookAt(0,mid,-2.0); if(eyeBottomPx()>camView.play) hi=mid; else lo=mid; }
-    camera.lookAt(0,(lo+hi)/2,-2.0); camera.updateMatrixWorld(); return (lo+hi)/2; };
-  const doorTopY=()=>{ eyeV.set(0,CFG.DOOR.h+0.075,ROOM.z0-0.035).project(camera); return (-eyeV.y*0.5+0.5)*camView.h; };
-  let ty=aimEyes(camBase.fov);
-  if(doorTopY()<topY){ let flo=camBase.fov, fhi=110;
-    for(let j=0;j<16;j++){ const fm=(flo+fhi)/2; aimEyes(fm); if(doorTopY()<topY) flo=fm; else fhi=fm; }
-    camBase.fov=fhi; ty=aimEyes(fhi); }
-  camBase.tgt.set(0,ty,-2.0);
-  R.position.copy(keepP); R.rotation.copy(keepR); R.updateMatrixWorld(true);
+  collectEyePts(); setProj(camView.play);
+  const a=w/camView.play, p=clamp((a-0.48)/(1.75-0.48),0,1), camZ=lerp(0.5,0.65,p);
+  // On tall screens the width decides the view and empty wall piles up above the door.
+  // Raise the camera until the door reaches the top edge, so the floor fills that space instead.
+  let camY=lerp(0.97,1.2,p), fov=fitFov(camY,camZ);
+  if(scrY(0,FRAME_DOOR_H,ROOM.z0)>FRAME_TOP_PX+2){
+    let ylo=camY, yhi=Math.max(camY,FRAME_CAM_MAX_Y);
+    fitFov(yhi,camZ); if(scrY(0,FRAME_DOOR_H,ROOM.z0)>FRAME_TOP_PX+2){ camY=yhi; } else { for(let k=0;k<12;k++){ const ym=(ylo+yhi)/2; fitFov(ym,camZ); if(scrY(0,FRAME_DOOR_H,ROOM.z0)>FRAME_TOP_PX+2) ylo=ym; else yhi=ym; } camY=yhi; }
+    fov=fitFov(camY,camZ);
+  }
+  camBase.pos.set(0,camY,camZ); camBase.fov=fov; camBase.tgt.set(0,aimEyes(fov),-2.0);
   applyCamera();
 }
+
+
+
+
 function applyCamera(){
   const k=ease(clamp(camMix,0,1));
   camera.fov=lerp(camBase.fov,camCut.fov,k); setProj(lerp(camView.play,camView.h,k));
@@ -1056,7 +1095,7 @@ function updCry(dt){
       for(let j=0;j<B.trail.length;j++){ const kk=j/(B.trail.length-1)*k; if(kk<k-0.02){ const dd=cornerD.clone().lerp(earD,kk).normalize(); const pp=surfPointW(dd); const tr=B.trail[j]; tr.visible=true; tr.position.copy(pp); tr.scale.set(0.006,0.004,0.008); } } }
     else { if(!c.dropped[i]){ c.dropped[i]=true; SFX.plop(); B.mesh.visible=false; wetSpots[i].visible=true; } const k=clamp((t-1.9)/1.1,0,1); wetSpots[i].scale.setScalar(0.001+easeOut(k)*0.07); }
   }
-  updParts(dt);
+  updParts(dt); updTearBubble(t);
   if(t>3.4){ G.scene='over'; showGameOver(); }
 }
 function surfPointW(d){ return new V3(HEADW.c.x+d.x*HEADW.r.x*1.01,HEADW.c.y+d.y*HEADW.r.y*1.01,HEADW.c.z+d.z*HEADW.r.z*1.01); }
@@ -1090,6 +1129,17 @@ function updateBadges(){
   }
 }
 
+// "또르르..." bubble that follows the rolling tear
+const tearBubble=document.createElement('div'); tearBubble.className='badge speech'; tearBubble.style.cssText='font-size:17px;font-weight:800;padding:5px 13px;display:none'; tearBubble.textContent='또르르...'; labelsEl.appendChild(tearBubble);
+function updTearBubble(t){
+  if(t<0.6||t>2.8){ tearBubble.style.display='none'; return; }
+  if(!CRY.said){ CRY.said=true; TTS.say('또르르'); }
+  tearBubble.style.display='block';
+  const p=beads[1].mesh.position; projectTo(p.x,p.y,p.z,scr);
+  const bw=tearBubble.offsetWidth, bx=clamp(scr.x,12+bw/2,window.innerWidth-12-bw/2);
+  tearBubble.style.left=bx+'px'; tearBubble.style.top=(scr.y-14)+'px'; tearBubble.style.setProperty('--tail',clamp(scr.x-bx+bw/2,8,bw-8)+'px');
+  tearBubble.style.opacity=Math.min(1,(t-0.6)*5,(2.8-t)*4);
+}
 // speech bubbles
 let bubbles=[];
 function updateBubbles(dt){
@@ -1098,7 +1148,81 @@ function updateBubbles(dt){
   if(G.scene!=='play') return;
   if(bubbles.length<3&&Math.random()<dt*0.9){ const cands=EN.list.filter(e=>e.state==='walk'&&!e.bubble&&e.z>ROOM.z0+0.7&&e.z<-0.5); if(cands.length){ const e=pick(cands); const el=document.createElement('div'); el.className='badge speech'; el.style.transform='translate(-50%,-100%)'; el.style.fontSize='12px'; el.style.fontWeight='700'; el.style.padding='3px 9px'; el.textContent=pick(LINES); labelsEl.appendChild(el); const b={e,el,t:2.6}; e.bubble=el; bubbles.push(b); SFX.heuk(0.03); } }
 }
-function showTitle(){ overlayEl.innerHTML=`<div class="box"><h1>자기연민 <span>디펜스</span></h1><div class="btn" id="btnStart">시작</div></div>`; $('btnStart').addEventListener('pointerdown',ev=>{ ev.stopPropagation(); audioInit(); SFX.click(); overlayEl.innerHTML=''; clearEnemies(); newRun(); startRound(0); }); }
+const TITLE_SVG=`<svg class="logo" viewBox="-22 0 464 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="자기연민 디펜스">
+<defs>
+  <text id="lgT1" x="210" y="92" text-anchor="middle" font-family="'Black Han Sans','Noto Sans KR',sans-serif" font-size="66" letter-spacing="1">자기연민</text>
+  <text id="lgT2" x="210" y="200" text-anchor="middle" font-family="'Black Han Sans','Noto Sans KR',sans-serif" font-size="118" letter-spacing="2">디펜스</text>
+  <linearGradient id="lgFill1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E4F6FF"/><stop offset=".55" stop-color="#8FD0FF"/><stop offset="1" stop-color="#3F8FE6"/></linearGradient>
+  <linearGradient id="lgFill2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF27A"/><stop offset=".42" stop-color="#FFB22E"/><stop offset=".8" stop-color="#FF5A2A"/><stop offset="1" stop-color="#E0253B"/></linearGradient>
+  <linearGradient id="lgGloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".85"/><stop offset=".38" stop-color="#fff" stop-opacity=".25"/><stop offset=".4" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <radialGradient id="lgBurst" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#FFE9A8"/><stop offset=".7" stop-color="#FFD166" stop-opacity=".55"/><stop offset="1" stop-color="#FFD166" stop-opacity="0"/></radialGradient>
+  <linearGradient id="lgRib" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF5A66"/><stop offset="1" stop-color="#C21D34"/></linearGradient>
+  <linearGradient id="lgTear" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E9F8FF"/><stop offset=".6" stop-color="#7CC6FF"/><stop offset="1" stop-color="#2F7FE0"/></linearGradient>
+  <linearGradient id="lgMeat" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2A24A"/><stop offset=".6" stop-color="#C8631E"/><stop offset="1" stop-color="#8E3B10"/></linearGradient>
+  <linearGradient id="lgBox" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#E23744"/><stop offset=".5" stop-color="#FF5363"/><stop offset="1" stop-color="#C21D34"/></linearGradient>
+</defs>
+<!-- sunburst -->
+<g class="lgBurst" transform="translate(210 150)">
+  <circle r="150" fill="url(#lgBurst)"/>
+  <g fill="#FFC94A" opacity=".45">${Array.from({length:16},(_,i)=>`<path d="M0 0 L-13 -150 L13 -150 Z" transform="rotate(${i*22.5})"/>`).join('')}</g>
+</g>
+<!-- fries (left) -->
+<g transform="translate(14 150) rotate(-16)">
+  <g stroke="#24201E" stroke-width="4" stroke-linejoin="round">
+    <rect x="-6" y="-44" width="11" height="52" rx="3" fill="#FFD23F" transform="rotate(-10)"/>
+    <rect x="6" y="-50" width="11" height="58" rx="3" fill="#FFE066" transform="rotate(6)"/>
+    <rect x="-18" y="-38" width="11" height="46" rx="3" fill="#FFC21F" transform="rotate(-22)"/>
+    <rect x="16" y="-40" width="11" height="48" rx="3" fill="#FFD23F" transform="rotate(18)"/>
+    <path d="M-26 -6 L30 -6 L22 44 L-18 44 Z" fill="url(#lgBox)"/>
+  </g>
+  <path d="M-16 0 Q2 10 22 0" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".85"/>
+  <path d="M-17 4 L-12 38" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".4"/>
+</g>
+<!-- drumstick (right) -->
+<g transform="translate(404 132) rotate(-34)">
+  <g stroke="#24201E" stroke-width="4" stroke-linejoin="round">
+    <path d="M-5 20 L-5 48 M5 20 L5 48" stroke-width="15" stroke-linecap="round"/>
+    <path d="M-5 20 L-5 48 M5 20 L5 48" stroke="#FFF6E6" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="-8" cy="52" r="8" fill="#FFF6E6"/><circle cx="8" cy="52" r="8" fill="#FFF6E6"/>
+    <path d="M0 -44 C28 -44 34 -12 26 8 C20 24 -20 24 -26 8 C-34 -12 -28 -44 0 -44 Z" fill="url(#lgMeat)"/>
+  </g>
+  <path d="M-14 -30 C-8 -38 6 -38 12 -32" fill="none" stroke="#FFD08A" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="-8" cy="-8" r="3" fill="#8E3B10" opacity=".6"/><circle cx="8" cy="0" r="2.5" fill="#8E3B10" opacity=".6"/><circle cx="-2" cy="10" r="2" fill="#8E3B10" opacity=".6"/>
+</g>
+<!-- line 1: 자기연민 -->
+<g transform="rotate(-4 210 70)">
+  <use href="#lgT1" fill="#14324F" stroke="#14324F" stroke-width="14" stroke-linejoin="round" transform="translate(0 6)"/>
+  <use href="#lgT1" fill="url(#lgFill1)" stroke="#14324F" stroke-width="10" stroke-linejoin="round" paint-order="stroke"/>
+  <use href="#lgT1" fill="url(#lgGloss)"/>
+  <!-- dripping tear -->
+  <g class="lgTear"><path d="M343 86 C343 86 331 102 331 110 A12 12 0 0 0 355 110 C355 102 343 86 343 86 Z" fill="url(#lgTear)" stroke="#14324F" stroke-width="3.5"/><ellipse cx="338" cy="106" rx="3" ry="5" fill="#fff" opacity=".9"/></g>
+</g>
+<!-- line 2: 디펜스 (3D extrusion) -->
+<g class="lgMain">
+  <use href="#lgT2" fill="#24201E" stroke="#24201E" stroke-width="20" stroke-linejoin="round" transform="translate(0 13)"/>
+  <use href="#lgT2" fill="#9E1628" stroke="#9E1628" stroke-width="12" stroke-linejoin="round" transform="translate(0 10)"/>
+  <use href="#lgT2" fill="#B81F31" stroke="#B81F31" stroke-width="12" stroke-linejoin="round" transform="translate(0 6)"/>
+  <use href="#lgT2" fill="#CF2A3A" stroke="#CF2A3A" stroke-width="12" stroke-linejoin="round" transform="translate(0 3)"/>
+  <use href="#lgT2" fill="url(#lgFill2)" stroke="#24201E" stroke-width="12" stroke-linejoin="round" paint-order="stroke"/>
+  <use href="#lgT2" fill="none" stroke="#FFF6D2" stroke-width="3" stroke-linejoin="round" opacity=".7"/>
+  <use href="#lgT2" fill="url(#lgGloss)"/>
+</g>
+<!-- ribbon -->
+<g transform="translate(210 250)">
+  <path d="M-150 -6 L-122 -6 L-122 30 L-150 30 L-138 12 Z" fill="#8A1422" stroke="#24201E" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M150 -6 L122 -6 L122 30 L150 30 L138 12 Z" fill="#8A1422" stroke="#24201E" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M-128 -18 Q0 -8 128 -18 L128 20 Q0 30 -128 20 Z" fill="url(#lgRib)" stroke="#24201E" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M-120 -11 Q0 -2 120 -11" fill="none" stroke="#fff" stroke-width="2.5" opacity=".45"/>
+  <text x="0" y="12" text-anchor="middle" font-family="'Black Han Sans','Noto Sans KR',sans-serif" font-size="23" fill="#FFF6E6" stroke="#6E0F1B" stroke-width="4" paint-order="stroke" letter-spacing="1">불쌍한 나를 막아라!</text>
+</g>
+<!-- sparkles -->
+<g fill="#fff" stroke="#24201E" stroke-width="2.5" stroke-linejoin="round" class="lgSpark">
+  <path d="M86 38 l5 12 12 5 -12 5 -5 12 -5 -12 -12 -5 12 -5 Z"/>
+  <path d="M360 206 l4 9 9 4 -9 4 -4 9 -4 -9 -9 -4 9 -4 Z"/>
+  <path d="M66 214 l3 7 7 3 -7 3 -3 7 -3 -7 -7 -3 7 -3 Z"/>
+</g>
+</svg>`;
+function showTitle(){ overlayEl.innerHTML=`<div class="box titleBox">${TITLE_SVG}<div class="btn" id="btnStart">시작</div></div>`; $('btnStart').addEventListener('pointerdown',ev=>{ ev.stopPropagation(); audioInit(); SFX.click(); overlayEl.innerHTML=''; clearEnemies(); newRun(); startRound(0); }); }
 function showGameOver(){ showBar(false); overlayEl.innerHTML=`<div class="box"><div class="st">${G.round+1}일째</div><div class="btn alt" id="btnRetry">이 판 다시</div><div class="btn" id="btnRestart">처음부터</div></div>`;
   $('btnRetry').addEventListener('pointerdown',ev=>{ ev.stopPropagation(); SFX.click(); overlayEl.innerHTML=''; restoreSnap(); startRound(G.snap.round); });
   $('btnRestart').addEventListener('pointerdown',ev=>{ ev.stopPropagation(); SFX.click(); overlayEl.innerHTML=''; clearEnemies(); newRun(); startRound(0); }); }
@@ -1168,7 +1292,7 @@ function render(now){
 function frame(now){ const dt=Math.min(0.05,(now-last)/1000); last=now; step(dt); render(now); requestAnimationFrame(frame); }
 async function boot(){
   paintFloorBase(); FF.rebuild(towers); buildBar(); updHeadW(); new ResizeObserver(()=>layoutCamera()).observe(barEl); updateHUD(); showBar(false); try{ renderer.compile(scene,camera); }catch(e){}
-  try{ await Promise.race([document.fonts.load("900 20px 'Noto Sans KR'"), new Promise(r=>setTimeout(r,1200))]); }catch(e){}
+  try{ await Promise.race([Promise.all([document.fonts.load("900 20px 'Noto Sans KR'"),document.fonts.load("20px 'Black Han Sans'","자기연민디펜스불쌍한나를막아라!")]), new Promise(r=>setTimeout(r,1500))]); }catch(e){}
   setThumbs();
   for(let i=0;i<4;i++){ const e=spawnEnemy({x:rand(-1.2,1.2),z:rand(-3.0,-1.2),state:'wander',speed:0.12}); }
   showTitle();

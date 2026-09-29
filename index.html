@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>자기연민 디펜스</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥲</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@500;700;900&display=swap" rel="stylesheet">
@@ -935,7 +936,7 @@ function startRound(r){
 }
 function newRun(){ resetCommuteVisual(); G.money=CFG.START_MONEY; G.kills=0; G.fat=0; G.round=0; G.tear=0; G.invaders=0; G.gnawPulse=0; GI.setFat(0); updHeadW(); GI.lie(); for(const t of towers.slice()) removeTower(t); for(const m of trash) scene.remove(m); trash.length=0; for(const p of projs) scene.remove(p.mesh); projs.length=0; zones.length=0; PT.list.length=0; clearFaceDecals(); paintFloorBase(); FF.rebuild(towers); camMix=0; doorTarget=DOOR_GAP; for(const b of beads){ b.mesh.visible=false; b.trail.forEach(t=>t.visible=false); } for(const w of wetSpots){ w.visible=false; w.scale.setScalar(0.001); } setSelected(null); hideGhost(); }
 function restoreSnap(){ resetCommuteVisual(); setSelected(null); hideGhost(); GI.lie(); camMix=0; const s=G.snap; G.tear=0; G.invaders=0; G.gnawPulse=0; G.money=s.money; G.kills=s.kills; G.fat=s.fat; GI.setFat(s.fat); updHeadW(); for(const t of towers.slice()) removeTower(t); for(const st of s.towers) makeTower(st.id,st.x,st.z,st.ammo); FF.rebuild(towers); for(const p of projs) scene.remove(p.mesh); projs.length=0; zones.length=0; PT.list.length=0; for(const b of beads){ b.mesh.visible=false; b.trail.forEach(t=>t.visible=false); } for(const w of wetSpots){ w.visible=false; w.scale.setScalar(0.001); } }
-function endRound(){ drag=null; G.scene='cut'; CUT={t:0,walkPh:0,counted:false,paid:false,doorOpened:false,doorClosed:false,reopened:false,closed2:false}; showBar(false); SFX.setMurmur(0); hideGhost(); setSelected(null); }
+function endRound(){ drag=null; G.scene='cut'; CUT={t:0,walkPh:0,counted:false,paid:false,doorOpened:false,doorClosed:false,reopened:false,closed2:false}; showBar(false); SFX.setMurmur(0); hideGhost(); }
 function startCry(){ drag=null; G.scene='cry'; CRY={t:0,dropped:[false,false]}; showBar(false); SFX.setMurmur(0); hideGhost(); setSelected(null); SFX.tearDrop(); for(const e of EN.list){ if(e.bubble){ e.bubble.remove(); e.bubble=null; } } }
 
 /* ---------- enemy update ---------- */
@@ -1126,10 +1127,10 @@ app.addEventListener('pointerdown',ev=>{
  
   if(ev.target.closest('.badge')) return;
   const card=ev.target.closest('.card'); if(card){ drag={id:card.dataset.id,px:ev.clientX,py:ev.clientY,moved:false,fromSel:false}; try{ app.setPointerCapture(ev.pointerId); }catch(e){} return; }
-  if(selected){ const pt=floorPoint(ev); if(pt){ drag={id:selected,px:ev.clientX,py:ev.clientY,moved:true,fromSel:true}; moveGhost(pt,selected); try{ app.setPointerCapture(ev.pointerId); }catch(e){} } else setSelected(null); return; }
+  if(selected){ const pt=floorPoint(ev); if(pt){ drag={id:selected,px:ev.clientX,py:ev.clientY,moved:true,fromSel:true}; moveGhost(pt,selected); try{ app.setPointerCapture(ev.pointerId); }catch(e){} } return; }
 });
 app.addEventListener('pointermove',ev=>{ if(!drag) return; if(!drag.moved&&Math.hypot(ev.clientX-drag.px,ev.clientY-drag.py)>10) drag.moved=true; if(drag.moved){ const pt=floorPoint(ev); if(pt) moveGhost(pt,drag.id); else if(ghost) ghost.visible=false; } });
-function endDrag(ev){ if(!drag) return; if(drag.moved){ const pt=floorPoint(ev); if(pt) tryPlace(drag.id,pt); hideGhost(); if(drag.fromSel) setSelected(null); } else { setSelected(selected===drag.id?null:drag.id); SFX.click(); } drag=null; }
+function endDrag(ev){ if(!drag) return; if(drag.moved){ const pt=floorPoint(ev); if(pt) tryPlace(drag.id,pt); hideGhost(); setSelected(drag.id); } else { setSelected(drag.id); SFX.click(); } drag=null; }
 app.addEventListener('pointerup',endDrag); app.addEventListener('pointercancel',()=>{ hideGhost(); drag=null; });
 window.addEventListener('keydown',ev=>{ if(G.scene!=='play') return; const k=parseInt(ev.key,10); if(k>=1&&k<=7) setSelected(FOODS[k-1].id); if(ev.key==='Escape') setSelected(null); });
 

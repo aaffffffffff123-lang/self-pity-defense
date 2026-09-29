@@ -209,6 +209,9 @@ function layoutCamera(){
   camCut.fov=lerp(82,64,pc); camCut.pos.set(0,lerp(2.30,2.60,pc),lerp(2.25,2.75,pc)); camCut.tgt.set(0,0.50,-1.45);
   // Tilt the play camera until the lower edge of the eyes sits right on top of the item bar.
   // If that pushes the top of the door frame off the screen, widen the view until it fits.
+  // Always measure the eyes in the lying pose, even if the figure is standing in the cut scene.
+  const R=GI.root, keepP=R.position.clone(), keepR=R.rotation.clone();
+  R.position.set(0,0.17,0.735); R.rotation.set(-Math.PI/2,0,0);
   setProj(camView.play); camera.position.copy(camBase.pos);
   const topY=8;
   const aimEyes=fov=>{ camera.fov=fov; camera.updateProjectionMatrix(); let lo=-3, hi=1.5;
@@ -220,6 +223,7 @@ function layoutCamera(){
     for(let j=0;j<16;j++){ const fm=(flo+fhi)/2; aimEyes(fm); if(doorTopY()<topY) flo=fm; else fhi=fm; }
     camBase.fov=fhi; ty=aimEyes(fhi); }
   camBase.tgt.set(0,ty,-2.0);
+  R.position.copy(keepP); R.rotation.copy(keepR); R.updateMatrixWorld(true);
   applyCamera();
 }
 function applyCamera(){

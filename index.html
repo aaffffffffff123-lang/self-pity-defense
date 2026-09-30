@@ -131,9 +131,9 @@ function markHint(k){ seenHints[k]=1; try{ localStorage.setItem('spd3_hints',JSO
 let AC=null, master=null, noiseBuf=null, murmurG=null, murmurSrc=null;
 // Korean speech for the "또르르" line (browser voice).
 const TTS={ ok:'speechSynthesis' in window, voice:null, unlocked:false,
-  pick(){ if(!this.ok) return; const vs=speechSynthesis.getVoices(); this.voice=vs.find(v=>/^ko/i.test(v.lang)&&/Google|Yuna|유나|SunHi|Heami/i.test(v.name))||vs.find(v=>/^ko/i.test(v.lang))||null; },
+  pick(){ if(!this.ok) return; const vs=speechSynthesis.getVoices(), ko=vs.filter(v=>/^ko/i.test(v.lang)); this.voice=ko.find(v=>/Google|Yuna|유나|SunHi|Heami/i.test(v.name))||ko[0]||null; this.voice2=ko.find(v=>v!==this.voice&&/Minsu|민수|InJoon|Hyunsu|Sora|소라|Jian|Seoyeon/i.test(v.name))||ko.find(v=>v!==this.voice)||this.voice; },
   unlock(){ if(!this.ok||this.unlocked) return; this.unlocked=true; try{ const u=new SpeechSynthesisUtterance(' '); u.lang='ko-KR'; u.volume=0; speechSynthesis.speak(u); }catch(e){} },
-  say(text,o){ if(!this.ok) return; o=o||{}; try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.lang='ko-KR'; if(this.voice) u.voice=this.voice; u.rate=o.rate||0.75; u.pitch=o.pitch||1.3; u.volume=1; speechSynthesis.speak(u); }catch(e){} } };
+  say(text,o){ if(!this.ok) return; o=o||{}; try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.lang='ko-KR'; const vc=o.alt?this.voice2:this.voice; if(vc) u.voice=vc; u.rate=o.rate||0.75; u.pitch=o.pitch||1.3; u.volume=1; speechSynthesis.speak(u); }catch(e){} } };
 if(TTS.ok){ TTS.pick(); speechSynthesis.addEventListener('voiceschanged',()=>TTS.pick()); }
 function audioInit(){
   TTS.unlock();
@@ -186,6 +186,8 @@ const SFX={
   doorClose(){ tn({type:'sine',f:160,f2:60,g:0.25,dur:0.14}); nz({type:'lowpass',f:1500,f2:200,g:0.2,dur:0.12}); },
   rattle(){ for(let i=0;i<4;i++){ nz({type:'bandpass',f:900,q:2,g:0.12,dur:0.05,when:i*0.09}); tn({type:'sine',f:140,f2:90,g:0.08,dur:0.05,when:i*0.09}); } },
   plop(){ tn({type:'sine',f:700,f2:180,g:0.3,dur:0.18}); nz({type:'lowpass',f:1200,g:0.1,dur:0.1}); },
+  flies(){ if(!AC) return; const t=AC.currentTime; for(const [f0,dl] of [[205,0],[241,0.22],[188,0.45]]){ const os=AC.createOscillator(); os.type='sawtooth'; os.frequency.setValueAtTime(f0,t+dl); const lfo=AC.createOscillator(); lfo.frequency.value=rand(5,9); const lg=AC.createGain(); lg.gain.value=rand(18,30); lfo.connect(lg); lg.connect(os.frequency); const bp=AC.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1500; bp.Q.value=1.3; const g=AC.createGain(); g.gain.setValueAtTime(0.0001,t+dl); g.gain.exponentialRampToValueAtTime(0.045,t+dl+0.3); g.gain.setValueAtTime(0.045,t+dl+1.1); g.gain.exponentialRampToValueAtTime(0.0001,t+dl+1.7); os.connect(bp); bp.connect(g); g.connect(master); os.start(t+dl); lfo.start(t+dl); os.stop(t+dl+1.8); lfo.stop(t+dl+1.8); } },
+  squish(){ nz({type:'lowpass',f:900,f2:140,q:3,g:0.42,dur:0.36}); tn({type:'sine',f:230,f2:55,g:0.32,dur:0.32}); nz({type:'bandpass',f:450,f2:1600,q:5,g:0.13,dur:0.16,when:0.11}); nz({type:'bandpass',f:700,f2:260,q:4,g:0.1,dur:0.2,when:0.22}); },
   tearDrop(){ tn({type:'sine',f:1500,f2:600,g:0.22,dur:0.25}); tn({type:'sine',f:2200,f2:1000,g:0.08,dur:0.18,when:0.03}); },
   coin(){ tn({type:'triangle',f:1318,g:0.14,dur:0.12}); tn({type:'triangle',f:1760,g:0.14,dur:0.3,when:0.07}); },
   step(){ nz({type:'lowpass',f:600,f2:200,g:0.14,dur:0.08}); },
@@ -855,6 +857,7 @@ const DEC={
   soup(x,z){ const g=fctx, px=fpx(x), py=fpz(z); g.globalAlpha=0.7; g.fillStyle='#E88A2A'; ell(g,px,py,0.19*PPM*rand(0.9,1.1),0.15*PPM*rand(0.9,1.1),rand(0,3)); g.fill(); for(let i=0;i<7;i++){ const a=rand(0,6.28),d=rand(0.12,0.26)*PPM; ell(g,px+Math.cos(a)*d,py+Math.sin(a)*d*0.8,rand(4,10),rand(3,7)); g.fill(); } g.globalAlpha=1; g.strokeStyle='#F7D27A'; g.lineWidth=3; for(let i=0;i<8;i++){ const ax=px+rand(-40,40), ay=py+rand(-30,30); g.beginPath(); g.moveTo(ax,ay); g.bezierCurveTo(ax+10,ay-10,ax+18,ay+10,ax+30,ay+rand(-6,6)); g.stroke(); } floorDirtyMark(); },
   colaStain(x,z,dx,dz){ const g=fctx; g.save(); g.translate(fpx(x),fpz(z)); g.rotate(Math.atan2(dz,dx)); g.scale(PPM,PPM); g.globalAlpha=0.45; g.fillStyle='#5A2A12'; g.beginPath(); g.moveTo(0,0); g.lineTo(0.75,-0.28); g.quadraticCurveTo(0.9,0,0.75,0.28); g.closePath(); g.fill(); g.globalAlpha=0.35; g.fillStyle='#F2E8D8'; for(let i=0;i<14;i++){ const d=rand(0.2,0.85), a=rand(-0.32,0.32); ell(g,Math.cos(a)*d,Math.sin(a)*d,rand(0.01,0.03),rand(0.008,0.02)); g.fill(); } g.restore(); floorDirtyMark(); },
   grease(x,z,r){ const g=fctx; g.globalAlpha=0.35; g.fillStyle='#B8791E'; ell(g,fpx(x),fpz(z),r*PPM,r*PPM*0.85,rand(0,3)); g.fill(); g.globalAlpha=1; for(let i=0;i<6;i++){ const a=rand(0,6.28),d=rand(0.2,0.5)*r*PPM; g.fillStyle='#FFF4DE'; ell(g,fpx(x)+Math.cos(a)*d,fpz(z)+Math.sin(a)*d,7,3,a); g.fill(); } floorDirtyMark(); },
+  mold(x,z,r){ const g=fctx, px=fpx(x), py=fpz(z), R=r*PPM; g.globalAlpha=0.55; g.fillStyle='#6F7A3A'; ell(g,px,py,R*rand(1.0,1.2),R*rand(0.8,1.0),rand(0,3)); g.fill(); g.globalAlpha=0.7; for(let i=0;i<9;i++){ const a=rand(0,6.28), d=R*rand(0.2,1.1); g.fillStyle=pick(['#9DB24E','#E8EDD2','#4E5A26']); ell(g,px+Math.cos(a)*d,py+Math.sin(a)*d*0.85,R*rand(0.1,0.22),R*rand(0.08,0.18)); g.fill(); } g.globalAlpha=1; floorDirtyMark(); },
   crumbs(x,z,col){ const g=fctx; g.fillStyle=col||'#E9C46A'; for(let i=0;i<6;i++){ ell(g,fpx(x)+rand(-14,14),fpz(z)+rand(-10,10),rand(2,4),rand(1.5,3)); g.fill(); } floorDirtyMark(); },
   pizzaMark(x,z){ const g=fctx; g.globalAlpha=0.5; g.fillStyle='#D9481F'; ell(g,fpx(x),fpz(z),12,9,rand(0,3)); g.fill(); g.globalAlpha=1; g.fillStyle='#F3D06F'; for(let i=0;i<4;i++){ ell(g,fpx(x)+rand(-16,16),fpz(z)+rand(-12,12),3,2); g.fill(); } floorDirtyMark(); },
 };
@@ -967,7 +970,20 @@ function chickenLand(pr){
   if(n) SFX.crush(); DEC.grease(x,z,0.5); burstParts(x,0.05,z,26,'#C98A2B',1.4,'crumb',0.007); zones.push({x,z,r:f.greaseR,t:f.grease,cd:0});
   pr.mesh.position.set(x,groundY(x,z)+0.03,z); pr.mesh.rotation.set(0,rand(0,6),rand(-0.3,0.3)); addTrash(pr.mesh);
 }
-function addTrash(m){ trash.push(m); if(trash.length>22){ const old=trash.shift(); scene.remove(old); } }
+function addTrash(m){ trash.push(m); if(trash.length>60){ const old=trash.shift(); scene.remove(old); } }
+// 하루 지나면 놓아둔 음식이 상함: 일어나 나가는 동안 곰팡이 피고 주저앉음 → 문 닫히면 쓰레기로 남음
+const MOLD=new THREE.Color(0x6E7F3A), flyGeo=new THREE.SphereGeometry(0.012,6,5), flyMat=new THREE.MeshStandardMaterial({color:0x151515,roughness:0.4});
+let flies=[];
+function spoilStart(){ for(const t of towers){ if(t.spoiled) continue; t.spoiled=true;
+    t.full.traverse(o=>{ if(o.isMesh&&o.material&&o.material.color){ o.material=o.material.clone(); o.userData.c0=o.material.color.clone(); } });
+    for(let i=0;i<3;i++){ const m=new THREE.Mesh(flyGeo,flyMat); scene.add(m); flies.push({m,x:t.x,z:t.z,y:groundY(t.x,t.z),a:rand(0,6.28),r:rand(0.05,0.1)+t.food.foot*0.5,h:rand(0.1,0.2),s:rand(6,10)*(Math.random()<0.5?-1:1)}); } } }
+function spoilStep(k,dt){ for(const t of towers){ if(!t.spoiled) continue; const sq=easeIn(clamp((k-0.45)/0.4,0,1));
+    t.full.traverse(o=>{ if(o.userData.c0) o.material.color.copy(o.userData.c0).lerp(MOLD,0.7*clamp(k*1.6,0,1)); });
+    t.full.scale.set(1+0.18*sq,1-0.62*sq,1+0.18*sq); }
+  for(const f of flies){ f.a+=f.s*dt; f.m.position.set(f.x+Math.cos(f.a)*f.r,f.y+f.h+Math.sin(f.a*2.3)*0.025,f.z+Math.sin(f.a)*f.r*0.8); } }
+function spoilEnd(){ for(const f of flies) scene.remove(f.m); flies=[];
+  for(const t of towers.slice()){ if(t.ammo>0){ DEC.mold(t.x,t.z,t.food.foot*1.1); const m=t.full; towerG.remove(m); m.scale.set(1.18,0.38,1.18); m.traverse(o=>{ if(o.userData.c0) o.material.color.copy(o.userData.c0).lerp(MOLD,0.7); }); scene.add(m); addTrash(m); } removeTower(t); }
+  FF.rebuild(towers); }
 function updProjs(dt){
   for(let i=projs.length-1;i>=0;i--){ const p=projs[i]; let done=false;
     if(p.type==='kimbap'||p.type==='fry'){ p.x+=p.vx*dt; p.y+=p.vy*dt; p.z+=p.vz*dt; p.dist+=Math.hypot(p.vx,p.vy,p.vz)*dt; p.rot+=p.vr*dt; p.mesh.position.set(p.x,p.y,p.z); p.mesh.rotation.set(p.rot,p.rot*0.7,0);
@@ -1104,6 +1120,8 @@ function updCameo(c,k,dt){
 function cutPay(){ if(!CUT||CUT.paid) return; CUT.paid=true; G.money+=CFG.WAGE; SFX.coin(); floatMoney('+'+won(CFG.WAGE),'plus'); hudDirty=true; }
 function updCut(dt){
   const c=CUT; c.t+=dt; const t=c.t, T=CUT_T;
+  if(!c.spoilGo&&t>=0.9){ c.spoilGo=true; if(towers.length){ spoilStart(); SFX.flies(); } }
+  if(c.spoilGo&&!c.spoilDone){ const k=clamp((t-0.9)/1.5,0,1); spoilStep(k,dt); if(!c.squished&&k>0.6&&towers.length){ c.squished=true; SFX.squish(); } }
   camMix=t<T.rise?clamp(t/T.rise,0,1):t>T.inEnd?1-clamp((t-T.inEnd)/(T.lieEnd-T.inEnd),0,1):1;
   const lieP=new V3(0,0.17,0.735), standP=new V3(0,0.86,0.91);
   if(t<T.rise){
@@ -1119,6 +1137,7 @@ function updCut(dt){
     if(!c.doorOpened&&k>0.52){ c.doorOpened=true; doorTarget=1.48; SFX.door(); }
   } else if(t<T.back){
     GI.root.visible=false;
+    if(!c.spoilDone){ c.spoilDone=true; spoilEnd(); }
     if(!c.doorClosed){ c.doorClosed=true; doorTarget=0; SFX.doorClose(); G.round++; hudDirty=true; G.fat=Math.min(1,G.round*0.13); GI.setFat(G.fat); updHeadW(); }
     // Away at work: the room stays dim for a while; the clock and window run through the night.
     const k=clamp((t-T.exit)/(T.back-T.exit),0,1), kw=clamp((k-0.1)/0.8,0,1), hours=9*ease(kw);
@@ -1143,6 +1162,7 @@ function updCut(dt){
 }
 function finishCut(){
   if(!CUT) return;
+  if(!CUT.spoilDone){ CUT.spoilDone=true; spoilEnd(); }
   if(CUT.cameo){ removeEnemy(CUT.cameo); CUT.cameo=null; }
   if(!CUT.doorClosed){ G.round++; G.fat=Math.min(1,G.round*0.13); GI.setFat(G.fat); updHeadW(); }
   cutPay(); resetCommuteVisual(); GI.lie(); camMix=0; doorTarget=DOOR_GAP;
@@ -1219,7 +1239,7 @@ function updMini(c,t,dt){
   if(u<1){ e.state='walk'; e.x=lerp(MINI.x0,MINI.x1,easeOut(u)); e.z=MINI.z; e.anim+=dt*40*(1-u*0.6); e.yaw=-Math.PI/2; }
   else { e.state='dead'; e.x=MINI.x1; e.z=MINI.z; const k=clamp((t-MINI.t0-MINI.walk)/0.3,0,1); e.yaw=lerp(-Math.PI/2,-Math.PI/2+0.75,easeOut(k)); }
   e.y=groundY(e.x,e.z);
-  if(t>=MINI.say&&!c.jji){ c.jji=true; TTS.say('찌질이',{rate:1.05,pitch:1.7}); SFX.heuk(0.05); }
+  if(t>=MINI.say&&!c.jji){ c.jji=true; TTS.say('찌질이',{rate:1.3,pitch:2,alt:true}); SFX.heuk(0.05); }
   if(t<MINI.say||t>MINI.sayEnd){ jjiBubble.style.display='none'; return; }
   jjiBubble.style.display='block';
   projectTo(e.x,e.y+0.2,e.z,scr);

@@ -333,7 +333,9 @@ function ellipsoid(rx,ry,rz,mat,seg){ const m=new THREE.Mesh(new THREE.SphereGeo
    ========================================================= */
 const ROOM=CFG.ROOM, RW=ROOM.x1-ROOM.x0, RD=ROOM.z1-ROOM.z0, RCX=(ROOM.x0+ROOM.x1)/2, RCZ=(ROOM.z0+ROOM.z1)/2;
 const PPM=320; // floor canvas px per meter
-const floorCv=mkCanvas(Math.round(RW*PPM),Math.round(RD*PPM)), fctx=floorCv.getContext('2d');
+// willReadFrequently keeps these big canvases in regular memory. Chrome on phones drops the contents of
+// GPU-backed canvases while the tab is in the background, which turned the floor and walls black.
+const floorCv=mkCanvas(Math.round(RW*PPM),Math.round(RD*PPM)), fctx=floorCv.getContext('2d',{willReadFrequently:true});
 const floorTex=new THREE.CanvasTexture(floorCv); floorTex.colorSpace=THREE.SRGBColorSpace; floorTex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
 let floorDirty=false, floorDirtyT=0;
 const fpx=x=>(x-ROOM.x0)*PPM, fpz=z=>(z-ROOM.z0)*PPM;
@@ -356,7 +358,7 @@ const floor=new THREE.Mesh(new THREE.PlaneGeometry(RW,RD), new THREE.MeshStandar
 floor.rotation.x=-Math.PI/2; floor.position.set(RCX,0,RCZ); floor.receiveShadow=true; scene.add(floor);
 
 // wall texture (faint stripes + dots)
-const wallCv=mkCanvas(256,256); { const g=wallCv.getContext('2d'); g.fillStyle='#F8F4EC'; g.fillRect(0,0,256,256); g.fillStyle='rgba(255,255,255,.55)'; for(let x=0;x<256;x+=32) g.fillRect(x,0,3,256); g.fillStyle='rgba(150,190,170,.22)'; for(let x=16;x<256;x+=32) for(let y=12;y<256;y+=28){ g.beginPath(); g.arc(x,y,2.2,0,6.283); g.fill(); } }
+const wallCv=mkCanvas(256,256); { const g=wallCv.getContext('2d',{willReadFrequently:true}); g.fillStyle='#F8F4EC'; g.fillRect(0,0,256,256); g.fillStyle='rgba(255,255,255,.55)'; for(let x=0;x<256;x+=32) g.fillRect(x,0,3,256); g.fillStyle='rgba(150,190,170,.22)'; for(let x=16;x<256;x+=32) for(let y=12;y<256;y+=28){ g.beginPath(); g.arc(x,y,2.2,0,6.283); g.fill(); } }
 const wallTex=new THREE.CanvasTexture(wallCv); wallTex.colorSpace=THREE.SRGBColorSpace; wallTex.wrapS=wallTex.wrapT=THREE.RepeatWrapping;
 function wallMat(rep){ const t=wallTex.clone(); t.repeat.set(rep[0],rep[1]); t.needsUpdate=true; return new THREE.MeshStandardMaterial({map:t,roughness:0.9}); }
 const roomG=new THREE.Group(); scene.add(roomG);

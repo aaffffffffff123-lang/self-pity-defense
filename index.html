@@ -713,23 +713,26 @@ function setEnemyArm(i,base,side,swing,bend,drop){
   (side<0?P.foreL:P.foreR).setMatrixAt(i,enemyForeM);
   setPart(side<0?P.handL:P.handR,i,enemyForeM,0,-0.022,0,0,0);
 }
+// 걸을 때 자세: back=허리 굽힘, lean=몸 전체 앞 기울기, head=고개 숙임 (라디안)
+const STOOP={back:0.36,lean:0.05,head:0.04}, E_HIP=0.055, upM=new THREE.Matrix4(), hipM=new THREE.Matrix4();
 function syncEnemies(tNow){
   const L=EN.list, n=L.length, P=EN.parts;
   for(let i=0;i<n;i++){ const e=L[i];
     let bob=0, headTilt=-0.12, la=0, ra=0, ll=0, rl=0, lean=0;
-    let sideShift=0, roll=0, shoulderDrop=0, headDrop=0, headForward=0, elbowL=-0.12, elbowR=-0.12;
+    let sideShift=0, roll=0, shoulderDrop=0, headDrop=0, headForward=0, elbowL=-0.12, elbowR=-0.12, stoop=0;
     if(e.state==='walk'||e.state==='leave'||e.state==='wander'){
       // Slower visual steps only. e.anim and all gameplay movement stay unchanged.
       const phase=e.anim*0.44+e.seed*0.11, s=Math.sin(phase), drag=Math.sin(phase-0.65);
       bob=(1-Math.cos(phase*2))*0.00025;
       ll=s*0.24; rl=-s*0.24;
-      la=-0.08-drag*0.055; ra=-0.08+drag*0.055;
+      stoop=STOOP.back+Math.cos(phase*2)*0.012;
+      la=-0.08-drag*0.055-stoop*0.85; ra=-0.08+drag*0.055-stoop*0.85;
       elbowL=-0.17-Math.sin(phase-1.0)*0.025; elbowR=-0.17+Math.sin(phase-1.0)*0.025;
       tmpQ.setFromAxisAngle(YAXIS,e.yaw);
-      lean=0.11+Math.cos(phase*2)*0.008;
+      lean=STOOP.lean+Math.cos(phase*2)*0.008;
       sideShift=s*0.0014; roll=-s*0.019;
       shoulderDrop=0.005; headDrop=0.003; headForward=0.005;
-      headTilt=0.32+Math.sin(phase-0.4)*0.025;
+      headTilt=STOOP.head+Math.sin(phase-0.4)*0.025; headForward=0.009;
     }
     else if(e.state==='enter'){ tmpQ.copy(e.q); const wriggle=Math.sin(e.anim*2.6); ll=wriggle*0.42; rl=-wriggle*0.42; la=-2.75+wriggle*0.12; ra=-2.75-wriggle*0.12; headTilt=0; elbowL=elbowR=-0.08; }
     else if(e.state==='fly'){ tmpE.set(e.rx,e.ry,e.rz); tmpQ.setFromEuler(tmpE); la=-1.5; ra=-1.5; ll=0.4; rl=-0.4; elbowL=elbowR=-0.3; }
@@ -738,9 +741,10 @@ function syncEnemies(tNow){
     if(sideShift){ pm.makeTranslation(sideShift,0,0); tmpM.multiply(pm); }
     if(lean){ pm.makeRotationX(lean); tmpM.multiply(pm); }
     if(roll){ pm.makeRotationZ(roll); tmpM.multiply(pm); }
-    setPart(P.head,i,tmpM,0,E_HEAD_Y-headDrop,headForward,headTilt,0); setPart(P.hair,i,tmpM,0,E_HEAD_Y-headDrop,headForward,headTilt,0); setPart(P.face,i,tmpM,0,E_HEAD_Y-headDrop,headForward,headTilt,0);
-    setPart(P.body,i,tmpM,0,E_BODY_Y,0,0,0);
-    setEnemyArm(i,tmpM,-1,la,elbowL,shoulderDrop); setEnemyArm(i,tmpM,1,ra,elbowR,shoulderDrop);
+    upM.copy(tmpM); if(stoop){ hipM.makeTranslation(0,E_HIP,0); upM.multiply(hipM); hipM.makeRotationX(stoop); upM.multiply(hipM); hipM.makeTranslation(0,-E_HIP,0); upM.multiply(hipM); }
+    setPart(P.head,i,upM,0,E_HEAD_Y-headDrop,headForward,headTilt,0); setPart(P.hair,i,upM,0,E_HEAD_Y-headDrop,headForward,headTilt,0); setPart(P.face,i,upM,0,E_HEAD_Y-headDrop,headForward,headTilt,0);
+    setPart(P.body,i,upM,0,E_BODY_Y,0,0,0);
+    setEnemyArm(i,upM,-1,la,elbowL,shoulderDrop); setEnemyArm(i,upM,1,ra,elbowR,shoulderDrop);
     setPart(P.legL,i,tmpM,-E_LEG[0],E_LEG[1],0,ll,0); setPart(P.legR,i,tmpM,E_LEG[0],E_LEG[1],0,rl,0);
     EN.faceAttr.array[i]=Math.floor(e.anim*0.9+e.seed)%6;
   }

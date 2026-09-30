@@ -939,7 +939,7 @@ function fireTower(t){
   else if(f.id==='cola'){ const {best}=bestCluster(cands,0.3); const dx=best.x-t.x, dz=best.z-t.z, l=Math.hypot(dx,dz)||1; colaSpray(t,dx/l,dz/l); }
   else if(f.id==='burger'){ const {dir,n}=bestLine(cands,t.x,t.z,f.roll,0.15); let near=false; for(const e of cands){ if(Math.hypot(e.x-t.x,e.z-t.z)<0.35){ near=true; break; } } if(n<2&&!near){ t.pulse=0; return false; } const b=burgerMesh(1); b.position.set(p.x,p.y+0.06,p.z); b.rotation.z=Math.PI/2; scene.add(b); projs.push({type:'burger',mesh:b,x:p.x,y:p.y+0.06,z:p.z,dx:dir[0],dz:dir[1],dist:0,max:f.roll,spd:1.25,roll:0,hit:new Set()}); SFX.burger(); }
   else if(f.id==='pizza'){ const {dir,n}=bestLine(cands,t.x,t.z,f.range,0.16); let near=false; for(const e of cands){ if(Math.hypot(e.x-t.x,e.z-t.z)<0.35){ near=true; break; } } if(n<3&&!near){ t.pulse=0; return false; } const sl=pizzaSliceMesh(); sl.position.set(p.x,p.y+0.1,p.z); scene.add(sl); projs.push({type:'pizza',mesh:sl,x:p.x,y:p.y+0.1,z:p.z,dx:dir[0],dz:dir[1],dist:0,max:f.range+0.3,spd:2.3,spin:0,hit:new Set()}); const pz=t.full.getObjectByName('pizza'); if(pz){ pz.children.forEach((s,i)=>{ s.visible=i<t.ammo-1; }); } SFX.pizza(); }
-  else if(f.id==='chicken'){ const {best,n}=bestCluster(cands,f.blast); let near=false; for(const e of cands){ if(Math.hypot(e.x-t.x,e.z-t.z)<0.4){ near=true; break; } } if(n<f.minCrowd) { t.pulse=0; return false; } const c=chickenMesh(1); c.position.set(p.x,p.y+0.06,p.z); scene.add(c); const cc=t.full.getObjectByName('chicken'); if(cc) cc.visible=false; projs.push({type:'chicken',mesh:c,x0:p.x,y0:p.y+0.06,z0:p.z,x1:best.x,z1:best.z,t:0,T:0.85,peak:0.9}); SFX.chickenFly(); }
+  else if(f.id==='chicken'){ const {best,n}=bestCluster(cands,f.blast); let near=false; for(const e of cands){ if(Math.hypot(e.x-t.x,e.z-t.z)<0.4){ near=true; break; } } if(n<f.minCrowd&&!(near&&!FF.reachable())) { t.pulse=0; return false; } const c=chickenMesh(1); c.position.set(p.x,p.y+0.06,p.z); scene.add(c); const cc=t.full.getObjectByName('chicken'); if(cc) cc.visible=false; projs.push({type:'chicken',mesh:c,x0:p.x,y0:p.y+0.06,z0:p.z,x1:best.x,z1:best.z,t:0,T:0.85,peak:0.9}); SFX.chickenFly(); }
   t.ammo--; t.cdT=f.cd; if(t.ammo<=0){ t.blocks=false; removeTower(t); FF.rebuild(towers); }
   return true;
 }
@@ -1025,10 +1025,10 @@ function endRound(){ drag=null; G.scene='cut'; CUT={t:0,walkPh:0,counted:false,p
 function startCry(){ drag=null; G.scene='cry'; CRY={t:0,dropped:[false,false]}; showBar(false); SFX.setMurmur(0); hideGhost(); setSelected(null); SFX.tearDrop(); for(const e of EN.list){ if(e.bubble){ e.bubble.remove(); e.bubble=null; } } }
 
 /* ---------- enemy update ---------- */
-const dirTmp=[0,0];
+const dirTmp=[0,0]; let simDt=0;
 function pushOutOfTowers(e){
-  // Walkers shut in with no way to the head are let through, so a round can never get stuck.
-  if(!FF.reachAt(e.x,e.z)) return;
+  // 길이 완전히 막혀도 음식은 벽으로 남는다. 막힌 채 8초 넘게 아무도 못 치우면 그때만 통과시켜 판이 멈추지 않게 한다.
+  if(!FF.reachAt(e.x,e.z)){ e.shut=(e.shut||0)+simDt; if(e.shut>8) return; } else e.shut=0;
   for(const t of towers){ if(!t.blocks) continue;
     const r=t.food.foot+TOWER_BODY_PAD, dx=e.x-t.x, dz=e.z-t.z, d2=dx*dx+dz*dz; if(d2>=r*r) continue;
     const d=Math.sqrt(d2), nx=d>1e-4?dx/d:1, nz=d>1e-4?dz/d:0;
@@ -1036,7 +1036,7 @@ function pushOutOfTowers(e){
     const vn=e.vx*nx+e.vz*nz; if(vn<0){ e.vx-=vn*nx; e.vz-=vn*nz; } }
 }
 function updEnemies(dt){
-  shBuild();
+  simDt=dt; shBuild();
   for(const e of EN.list){ e.sx=0; e.sz=0; if(e.state!=='walk'&&e.state!=='wander') continue;
     shQuery(e.x,e.z,0.058,(o,d)=>{ if(o===e||d<1e-4||(o.state!=='walk'&&o.state!=='wander')) return; const f=(0.058-d)/0.058; e.sx+=(e.x-o.x)/d*f*0.32; e.sz+=(e.z-o.z)/d*f*0.32; }); }
   for(let i=EN.list.length-1;i>=0;i--){ const e=EN.list[i]; e.t+=dt;
@@ -1293,10 +1293,16 @@ let ghostKey='';
 function moveGhost(pt,id){ if(!ghost||ghostId!==id){ hideGhost(); ghost=makeGhost(id); ghostId=id; scene.add(ghost); ghostKey=''; } ghost.visible=true; ghost.position.set(pt.x,groundY(pt.x,pt.z),pt.z); const key=Math.round(pt.x/0.03)+','+Math.round(pt.z/0.03); if(key!==ghostKey){ ghostKey=key; ghostOk=placeValid(id,pt.x,pt.z); } const ok=ghostOk&&G.money>=FOOD_BY[id].price; ghost.userData.model.traverse(o=>{ if(o.isMesh) o.material=ok?M.ghostOk:M.ghostNo; }); ghost.userData.ring.material.color.set(ok?0x2FD06B:0xE23744); ghost.userData.foot.material.color.set(ok?0x2FD06B:0xE23744); }
 function hideGhost(){ if(ghost){ scene.remove(ghost); ghost.traverse(o=>{ if(o.geometry&&o!==ghost.userData.model) o.geometry.dispose(); }); ghost=null; ghostId=null; } }
 const DOOR_KEEPOUT=1.0;
-function placeValid(id,x,z,ignore=null){ const f=FOOD_BY[id]; if(x<ROOM.x0+f.foot+0.06||x>ROOM.x1-f.foot-0.06||z<ROOM.z0+DOOR_KEEPOUT+f.foot||z>ROOM.z1-f.foot-0.06) return false; if(Math.hypot(x,z)<CFG.HEAD_KEEPOUT+f.foot) return false;
+
+
+const PLACE_DOOR_GAP=0.4, PLACE_OVERLAP=0.6;
+function placeValid(id,x,z,ignore=null){ const f=FOOD_BY[id]; if(x<ROOM.x0+f.foot+0.06||x>ROOM.x1-f.foot-0.06||z<ROOM.z0+PLACE_DOOR_GAP+f.foot||z>ROOM.z1-f.foot-0.06) return false; if(Math.hypot(x,z)<CFG.HEAD_KEEPOUT+f.foot) return false;
   const r=f.foot+0.02; for(const [ox,oz] of [[0,0],[r,0],[-r,0],[0,r],[0,-r],[r*0.7,r*0.7],[-r*0.7,r*0.7],[r*0.7,-r*0.7],[-r*0.7,-r*0.7]]) if(FF.isBase(x+ox,z+oz)) return false;
-  for(const t of towers){ if(t!==ignore&&Math.hypot(t.x-x,t.z-z)<t.food.foot+f.foot+0.04) return false; }
-  const ok=FF.testPlacement(x,z,f.foot,ignore?towers.filter(t=>t!==ignore):towers); FF.rebuild(towers); return ok; }
+  for(const t of towers){ if(t!==ignore&&Math.hypot(t.x-x,t.z-z)<(t.food.foot+f.foot)*PLACE_OVERLAP) return false; }
+  return true; }
+
+
+
 function placeTower(id,x,z){ const f=FOOD_BY[id]; G.money-=f.price; const t=makeTower(id,x,z); FF.rebuild(towers); hudDirty=true; return t; }
 function tryPlace(id,pt){ if(G.scene!=='play') return false; const f=FOOD_BY[id]; if(!placeValid(id,pt.x,pt.z)){ SFX.broke(); return false; } if(G.money<f.price){ SFX.broke(); floatMoney('돈이 없어요','minus'); return false; } placeTower(id,pt.x,pt.z); SFX.place(); floatMoney('-'+won(f.price),'minus'); toastT=Math.min(toastT,0.5); return true; }
 function pickTower(ev){ raycaster.setFromCamera(ndcFrom(ev),camera); const hits=raycaster.intersectObjects(towerG.children,true); for(const h of hits){ let o=h.object; while(o&&!o.userData.tower) o=o.parent; if(o&&o.userData.tower) return o.userData.tower; } return null; }

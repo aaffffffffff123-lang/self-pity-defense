@@ -1230,11 +1230,21 @@ function updMini(c,t,dt){
 }
 // speech bubbles
 let bubbles=[];
+// 대사 뽑기: 13개를 섞어 한 바퀴 다 쓴 뒤 다시 섞음. 지금 떠 있는 대사와 바로 전 대사는 건너뜀.
+let lineBag=[], lastLine='';
+function shuffled(a){ a=a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); const t=a[i]; a[i]=a[j]; a[j]=t; } return a; }
+function nextLine(){
+  const busy=new Set(bubbles.map(b=>b.el.textContent)); if(LINES.length>busy.size+1) busy.add(lastLine);
+  let i=lineBag.findIndex(l=>!busy.has(l));
+  if(i<0){ lineBag=lineBag.concat(shuffled(LINES)); i=lineBag.findIndex(l=>!busy.has(l)); }
+  if(i<0) return lastLine=pick(LINES);
+  return lastLine=lineBag.splice(i,1)[0];
+}
 function updateBubbles(dt){
   for(let i=bubbles.length-1;i>=0;i--){ const b=bubbles[i]; b.t-=dt; if(b.t<=0||!b.e.alive||b.e.state!=='walk'){ b.el.remove(); b.e.bubble=null; bubbles.splice(i,1); continue; }
     projectTo(b.e.x,b.e.y+0.2,b.e.z,scr); const bw=b.el.offsetWidth, bx=clamp(scr.x,12+bw/2,window.innerWidth-12-bw/2); b.el.style.left=bx+'px'; b.el.style.top=(scr.y-8)+'px'; b.el.style.setProperty('--tail',clamp(scr.x-bx+bw/2,8,bw-8)+'px'); b.el.style.opacity=Math.min(1,b.t*3,(2.6-b.t)*4); }
   if(G.scene!=='play') return;
-  if(bubbles.length<3&&Math.random()<dt*0.9){ const cands=EN.list.filter(e=>e.state==='walk'&&!e.bubble&&e.z>ROOM.z0+0.7&&e.z<-0.5); if(cands.length){ const e=pick(cands); const el=document.createElement('div'); el.className='badge speech'; el.style.transform='translate(-50%,-100%)'; el.style.fontSize='12px'; el.style.fontWeight='700'; el.style.padding='3px 9px'; el.textContent=pick(LINES); labelsEl.appendChild(el); const b={e,el,t:2.6}; e.bubble=el; bubbles.push(b); SFX.heuk(0.03); } }
+  if(bubbles.length<3&&Math.random()<dt*0.9){ const cands=EN.list.filter(e=>e.state==='walk'&&!e.bubble&&e.z>ROOM.z0+0.7&&e.z<-0.5); if(cands.length){ const e=pick(cands); const el=document.createElement('div'); el.className='badge speech'; el.style.transform='translate(-50%,-100%)'; el.style.fontSize='12px'; el.style.fontWeight='700'; el.style.padding='3px 9px'; el.textContent=nextLine(); labelsEl.appendChild(el); const b={e,el,t:2.6}; e.bubble=el; bubbles.push(b); SFX.heuk(0.03); } }
 }
 
 const TITLE_SVG=(()=>{
@@ -1311,23 +1321,37 @@ let ghost=null, ghostId=null, ghostOk=false;
 function ndcFrom(ev){ ndc.set((ev.clientX/window.innerWidth)*2-1,-(ev.clientY/window.innerHeight)*2+1); return ndc; }
 function floorPoint(ev,out){ const br=barEl.getBoundingClientRect(); if(ev.clientX>=br.left-4&&ev.clientX<=br.right+4&&ev.clientY>=br.top-4&&ev.clientY<=br.bottom+4) return null; raycaster.setFromCamera(ndcFrom(ev),camera); const hit=raycaster.ray.intersectPlane(floorPlane,out||new V3()); if(!hit) return null; if(hit.x<ROOM.x0||hit.x>ROOM.x1||hit.z<ROOM.z0||hit.z>ROOM.z1) return null; return hit; }
 function makeGhost(id){ const g=new THREE.Group(); const m=buildFood(id,true); m.traverse(o=>{ if(o.isMesh){ o.material=M.ghostOk; o.castShadow=false; o.receiveShadow=false; } }); g.add(m); g.userData.model=m; const f=FOOD_BY[id]; const ring=new THREE.Mesh(new THREE.RingGeometry(f.range-0.012,f.range,64),new THREE.MeshBasicMaterial({color:0x2FD06B,transparent:true,opacity:0.55,depthWrite:false,side:THREE.DoubleSide})); ring.rotation.x=-Math.PI/2; ring.position.y=0.006; g.add(ring); g.userData.ring=ring; const foot=new THREE.Mesh(new THREE.CircleGeometry(f.foot+0.02,32),new THREE.MeshBasicMaterial({color:0x2FD06B,transparent:true,opacity:0.22,depthWrite:false})); foot.rotation.x=-Math.PI/2; foot.position.y=0.005; g.add(foot); g.userData.foot=foot; return g; }
-let ghostKey='';
+let ghostKey='', ghostWhy='', tipHoldT=0;
+const ghostTip=document.createElement('div'); ghostTip.className='badge speech'; ghostTip.style.cssText='font-size:13px;font-weight:800;padding:4px 10px;color:#E23744;display:none'; labelsEl.appendChild(ghostTip);
+function showTip(txt,x,z){ if(!txt){ ghostTip.style.display='none'; return; } ghostTip.textContent=txt; ghostTip.style.display='block'; projectTo(x,groundY(x,z)+0.24,z,scr); const bw=ghostTip.offsetWidth, bx=clamp(scr.x,12+bw/2,window.innerWidth-12-bw/2); ghostTip.style.left=bx+'px'; ghostTip.style.top=Math.max(ghostTip.offsetHeight+8,scr.y-6)+'px'; ghostTip.style.setProperty('--tail',clamp(scr.x-bx+bw/2,8,bw-8)+'px'); }
 
-function moveGhost(pt,id){ if(!ghost||ghostId!==id){ hideGhost(); ghost=makeGhost(id); ghostId=id; scene.add(ghost); ghostKey=''; } ghost.visible=true; ghost.position.set(pt.x,groundY(pt.x,pt.z),pt.z); const key=Math.round(pt.x/0.03)+','+Math.round(pt.z/0.03); if(key!==ghostKey){ ghostKey=key; ghostOk=placeValid(id,pt.x,pt.z); } const ok=ghostOk&&G.money>=FOOD_BY[id].price; ghost.userData.model.traverse(o=>{ if(o.isMesh) o.material=ok?M.ghostOk:M.ghostNo; }); ghost.userData.ring.material.color.set(ok?0x2FD06B:0xE23744); ghost.userData.foot.material.color.set(ok?0x2FD06B:0xE23744); }
-function hideGhost(){ if(ghost){ scene.remove(ghost); ghost.traverse(o=>{ if(o.geometry&&o!==ghost.userData.model) o.geometry.dispose(); }); ghost=null; ghostId=null; } }
+function moveGhost(pt,id){ if(!ghost||ghostId!==id){ hideGhost(); ghost=makeGhost(id); ghostId=id; scene.add(ghost); ghostKey=''; } ghost.visible=true; ghost.position.set(pt.x,groundY(pt.x,pt.z),pt.z); const key=Math.round(pt.x/0.03)+','+Math.round(pt.z/0.03); if(key!==ghostKey){ ghostKey=key; ghostWhy=placeReason(id,pt.x,pt.z); ghostOk=!ghostWhy; } const lack=FOOD_BY[id].price-G.money, ok=ghostOk&&lack<=0; tipHoldT=0; showTip(lack>0?'돈이 '+won(lack)+' 모자라요':ghostWhy,pt.x,pt.z); ghost.userData.model.traverse(o=>{ if(o.isMesh) o.material=ok?M.ghostOk:M.ghostNo; }); ghost.userData.ring.material.color.set(ok?0x2FD06B:0xE23744); ghost.userData.foot.material.color.set(ok?0x2FD06B:0xE23744); }
+function hideGhost(){ if(tipHoldT<=0) ghostTip.style.display='none'; if(ghost){ scene.remove(ghost); ghost.traverse(o=>{ if(o.geometry&&o!==ghost.userData.model) o.geometry.dispose(); }); ghost=null; ghostId=null; } }
 const DOOR_KEEPOUT=1.0;
 
 
 const PLACE_DOOR_GAP=0.4, PLACE_OVERLAP=0.6;
-function placeValid(id,x,z,ignore=null){ const f=FOOD_BY[id]; if(x<ROOM.x0+f.foot+0.06||x>ROOM.x1-f.foot-0.06||z<ROOM.z0+PLACE_DOOR_GAP+f.foot||z>ROOM.z1-f.foot-0.06) return false; if(Math.hypot(x,z)<CFG.HEAD_KEEPOUT+f.foot) return false;
-  const r=f.foot+0.02; for(const [ox,oz] of [[0,0],[r,0],[-r,0],[0,r],[0,-r],[r*0.7,r*0.7],[-r*0.7,r*0.7],[r*0.7,-r*0.7],[-r*0.7,-r*0.7]]) if(FF.isBase(x+ox,z+oz)) return false;
-  for(const t of towers){ if(t!==ignore&&Math.hypot(t.x-x,t.z-z)<(t.food.foot+f.foot)*PLACE_OVERLAP) return false; }
-  return true; }
+// 못 놓는 이유를 돌려줌. 놓을 수 있으면 빈 문자열.
+function blockedWhat(x,z){
+  if(x>TABLE.x-TABLE.w/2-0.1&&x<TABLE.x+TABLE.w/2+0.1&&z>TABLE.z-TABLE.d/2-0.1&&z<TABLE.z+TABLE.d/2+0.1) return '밥상 위엔 못 놔요';
+  if(Math.hypot(x-LAUND.x,z-LAUND.z)<LAUND.r+0.08) return '빨래 위엔 못 놔요';
+  if(Math.hypot(x-FAN.x,z-FAN.z)<FAN.r+0.08) return '선풍기 자리예요';
+  if(x>-0.35&&x<0.35&&z>0.12) return '내 몸 위엔 못 놔요';
+  return '벽에 너무 붙었어요';
+}
+function placeReason(id,x,z,ignore=null){ const f=FOOD_BY[id];
+  if(z<ROOM.z0+PLACE_DOOR_GAP+f.foot) return '문 앞엔 못 놔요';
+  if(x<ROOM.x0+f.foot+0.06||x>ROOM.x1-f.foot-0.06||z>ROOM.z1-f.foot-0.06) return '벽에 너무 붙었어요';
+  if(Math.hypot(x,z)<CFG.HEAD_KEEPOUT+f.foot) return '머리에 너무 가까워요';
+  const r=f.foot+0.02; for(const [ox,oz] of [[0,0],[r,0],[-r,0],[0,r],[0,-r],[r*0.7,r*0.7],[-r*0.7,r*0.7],[r*0.7,-r*0.7],[-r*0.7,-r*0.7]]) if(FF.isBase(x+ox,z+oz)) return blockedWhat(x+ox,z+oz);
+  for(const t of towers){ if(t!==ignore&&Math.hypot(t.x-x,t.z-z)<(t.food.foot+f.foot)*PLACE_OVERLAP) return '다른 음식이랑 겹쳐요'; }
+  return ''; }
+function placeValid(id,x,z,ignore=null){ return !placeReason(id,x,z,ignore); }
 
 
 
 function placeTower(id,x,z){ const f=FOOD_BY[id]; G.money-=f.price; const t=makeTower(id,x,z); FF.rebuild(towers); hudDirty=true; return t; }
-function tryPlace(id,pt){ if(G.scene!=='play') return false; const f=FOOD_BY[id]; if(!placeValid(id,pt.x,pt.z)){ SFX.broke(); return false; } if(G.money<f.price){ SFX.broke(); floatMoney('돈이 없어요','minus'); return false; } placeTower(id,pt.x,pt.z); SFX.place(); floatMoney('-'+won(f.price),'minus'); toastT=Math.min(toastT,0.5); return true; }
+function tryPlace(id,pt){ if(G.scene!=='play') return false; const f=FOOD_BY[id]; if(G.money<f.price){ SFX.broke(); floatMoney('돈이 없어요','minus'); tipHoldT=1.4; showTip('돈이 '+won(f.price-G.money)+' 모자라요',pt.x,pt.z); return false; } const why=placeReason(id,pt.x,pt.z); if(why){ SFX.broke(); tipHoldT=1.4; showTip(why,pt.x,pt.z); return false; } placeTower(id,pt.x,pt.z); SFX.place(); floatMoney('-'+won(f.price),'minus'); toastT=Math.min(toastT,0.5); return true; }
 function pickTower(ev){ raycaster.setFromCamera(ndcFrom(ev),camera); const hits=raycaster.intersectObjects(towerG.children,true); for(const h of hits){ let o=h.object; while(o&&!o.userData.tower) o=o.parent; if(o&&o.userData.tower) return o.userData.tower; } return null; }
 
 /* ---------- input ---------- */
@@ -1341,7 +1365,7 @@ app.addEventListener('pointerdown',ev=>{
   const card=ev.target.closest('.card'); if(card){ drag={id:card.dataset.id,px:ev.clientX,py:ev.clientY,moved:false,fromSel:false}; try{ app.setPointerCapture(ev.pointerId); }catch(e){} return; }
   if(selected){ const pt=floorPoint(ev); if(pt){ drag={id:selected,px:ev.clientX,py:ev.clientY,moved:true,fromSel:true}; moveGhost(pt,selected); try{ app.setPointerCapture(ev.pointerId); }catch(e){} } return; }
 });
-app.addEventListener('pointermove',ev=>{ if(!drag) return; if(!drag.moved&&Math.hypot(ev.clientX-drag.px,ev.clientY-drag.py)>10) drag.moved=true; if(drag.moved){ const pt=floorPoint(ev); if(pt) moveGhost(pt,drag.id); else if(ghost) ghost.visible=false; } });
+app.addEventListener('pointermove',ev=>{ if(!drag) return; if(!drag.moved&&Math.hypot(ev.clientX-drag.px,ev.clientY-drag.py)>10) drag.moved=true; if(drag.moved){ const pt=floorPoint(ev); if(pt) moveGhost(pt,drag.id); else if(ghost){ ghost.visible=false; ghostTip.style.display='none'; } } });
 function endDrag(ev){ if(!drag) return; if(drag.moved){ const pt=floorPoint(ev); if(pt) tryPlace(drag.id,pt); hideGhost(); setSelected(drag.id); } else { setSelected(drag.id); SFX.click(); } drag=null; }
 app.addEventListener('pointerup',endDrag); app.addEventListener('pointercancel',()=>{ hideGhost(); drag=null; });
 window.addEventListener('keydown',ev=>{ if(G.scene!=='play') return; const k=parseInt(ev.key,10); if(k>=1&&k<=7) setSelected(FOODS[k-1].id); if(ev.key==='Escape') setSelected(null); });
@@ -1362,6 +1386,8 @@ function step(dt){
   const dTarget=doorTarget+(doorRattle>0?Math.sin(G.time*38)*0.035:0); doorAng+=(dTarget-doorAng)*Math.min(1,dt*6); doorHinge.rotation.y=-doorAng;
   if(camShakeT>0){ camShakeT-=dt; if(camShakeT<=0) camShake=0; }
   if(toastT>0){ toastT-=dt; if(toastT<=0) toastEl.style.opacity=0; }
+  if(tipHoldT>0){ tipHoldT-=dt; if(tipHoldT<=0&&!ghost) ghostTip.style.display='none'; }
+  if(G.scene!=='play'&&!ghost) ghostTip.style.display='none';
 }
 function render(now){
   applyCamera();

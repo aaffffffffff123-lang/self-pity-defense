@@ -20,6 +20,13 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 #arcadeFace svg{display:block;width:100%;height:100%;filter:drop-shadow(0 0 1.5px #fff) drop-shadow(1px 2px 1.5px #0006)}
 #arcadeFace:active svg{transform:scale(.88)}
 #arcadeFace:focus-visible{outline:3px solid var(--red);outline-offset:3px}
+#sndBtn{position:fixed;left:calc(env(safe-area-inset-left,0px) + 56px);top:calc(var(--sat) + 10px);width:37px;height:37px;padding:0;border:0;border-radius:14px;background:rgba(255,255,255,.93);box-shadow:0 2px 0 rgba(90,60,0,.12);display:flex;align-items:center;justify-content:center;z-index:20;cursor:pointer;touch-action:manipulation}
+#sndBtn svg{width:24px;height:24px;display:block}
+#sndBtn .x{display:none;stroke:var(--red)}
+#sndBtn.off .x{display:block} #sndBtn.off .w{display:none}
+#sndBtn:active svg{transform:scale(.88)}
+#sndBtn:focus-visible{outline:3px solid var(--red);outline-offset:3px}
+#hud{padding-left:calc(env(safe-area-inset-left,0px) + 104px)}
 .pill{background:rgba(255,255,255,.93);border-radius:14px;padding:6px 12px;font-weight:700;font-size:14px;line-height:1.25;box-shadow:0 2px 0 rgba(90,60,0,.12)}
 .pill small{display:block;font-size:11px;font-weight:500;opacity:.6}
 #hudMoney{font-size:19px;font-weight:900;position:relative;min-width:110px;text-align:right}
@@ -92,6 +99,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 <div id="overlay"></div>
 </div>
 
+<button id="sndBtn" type="button" title="소리 끄기 (M)" aria-label="소리 끄기">
+  <svg viewBox="0 0 24 24" fill="none" stroke="#24201E" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h3.5L12 5v14l-4.5-4H4z"/><path class="w" d="M15.5 9.5a3.5 3.5 0 0 1 0 5M18 7a7 7 0 0 1 0 10"/><path class="x" d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
+</button>
 <a id="arcadeFace"
    href="https://aaffffffffff123-lang.github.io/arcade/"
    target="_top"
@@ -166,15 +176,15 @@ let AC=null, master=null, noiseBuf=null, murmurG=null, murmurSrc=null;
 const TTS={ ok:'speechSynthesis' in window, voice:null, unlocked:false,
   pick(){ if(!this.ok) return; const vs=speechSynthesis.getVoices(), ko=vs.filter(v=>/^ko/i.test(v.lang)); this.voice=ko.find(v=>/Google|Yuna|유나|SunHi|Heami/i.test(v.name))||ko[0]||null; this.voice2=ko.find(v=>v!==this.voice&&/Minsu|민수|InJoon|Hyunsu|Sora|소라|Jian|Seoyeon/i.test(v.name))||ko.find(v=>v!==this.voice)||this.voice; },
   unlock(){ if(!this.ok||this.unlocked) return; this.unlocked=true; try{ const u=new SpeechSynthesisUtterance(' '); u.lang='ko-KR'; u.volume=0; speechSynthesis.speak(u); }catch(e){} },
-  say(text,o){ if(!this.ok) return; o=o||{}; try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.lang='ko-KR'; const vc=o.alt?this.voice2:this.voice; if(vc) u.voice=vc; u.rate=o.rate||0.75; u.pitch=o.pitch||1.3; u.volume=1; speechSynthesis.speak(u); }catch(e){} } };
+  say(text,o){ if(!this.ok||muted) return; o=o||{}; try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.lang='ko-KR'; const vc=o.alt?this.voice2:this.voice; if(vc) u.voice=vc; u.rate=o.rate||0.75; u.pitch=o.pitch||1.3; u.volume=1; speechSynthesis.speak(u); }catch(e){} } };
 if(TTS.ok){ TTS.pick(); speechSynthesis.addEventListener('voiceschanged',()=>TTS.pick()); }
 function audioInit(){
   TTS.unlock();
   try{
-    if(AC){ if(AC.state==='suspended') AC.resume(); return; }
+    if(AC){ if(AC.state!=='running') AC.resume(); return; }
     AC=new (window.AudioContext||window.webkitAudioContext)();
     const comp=AC.createDynamicsCompressor(); comp.threshold.value=-14; comp.ratio.value=4; comp.attack.value=0.003; comp.release.value=0.18;
-    master=AC.createGain(); master.gain.value=0.85; master.connect(comp); comp.connect(AC.destination);
+    master=AC.createGain(); master.gain.value=muted?0:0.85; master.connect(comp); comp.connect(AC.destination);
     noiseBuf=AC.createBuffer(1,AC.sampleRate*2,AC.sampleRate); const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
     murmurG=AC.createGain(); murmurG.gain.value=0; murmurG.connect(master);
     murmurSrc=AC.createBufferSource(); murmurSrc.buffer=noiseBuf; murmurSrc.loop=true;
@@ -185,6 +195,11 @@ function audioInit(){
     setTimeout(()=>{ if(SFX._buzzN) SFX.setBuzz(SFX._buzzN); },50);
   }catch(e){ AC=null; }
 }
+// 탭을 내리거나 다른 앱으로 넘어가면 소리를 전부 멈추고, 돌아오면 다시 켭니다.
+function audioSleep(){ if(TTS.ok){ try{ speechSynthesis.cancel(); }catch(e){} } if(AC&&AC.state==='running'){ try{ const p=AC.suspend(); if(p&&p.catch) p.catch(()=>{}); }catch(e){} } }
+function audioWake(){ if(AC&&!document.hidden&&AC.state!=='running'&&AC.state!=='closed'){ try{ const p=AC.resume(); if(p&&p.catch) p.catch(()=>{}); }catch(e){} } }
+document.addEventListener('visibilitychange',()=>{ if(document.hidden) audioSleep(); else audioWake(); });
+window.addEventListener('pagehide',audioSleep); window.addEventListener('pageshow',audioWake);
 function nz(o){ if(!AC) return; const t=AC.currentTime+(o.when||0);
   const src=AC.createBufferSource(); src.buffer=noiseBuf; src.playbackRate.value=o.rate||1;
   const f=AC.createBiquadFilter(); f.type=o.type||'lowpass'; f.frequency.setValueAtTime(o.f||1000,t); if(o.f2) f.frequency.exponentialRampToValueAtTime(o.f2,t+o.dur); f.Q.value=o.q||0.8;
@@ -196,6 +211,15 @@ function tn(o){ if(!AC) return; const t=AC.currentTime+(o.when||0);
   let node=os; if(o.lp){ const f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.value=o.lp; f.Q.value=o.q||1; os.connect(f); node=f; }
   node.connect(g); g.connect(master); os.start(t); os.stop(t+o.dur+0.05); }
 let lastSplat=0, splatN=0;
+// 소리 켜기/끄기 버튼 (PC는 M 키). 새로 열 때마다 켜진 상태로 시작합니다.
+let muted=false;
+const sndBtn=$('sndBtn');
+function setMuted(m){ muted=m; sndBtn.classList.toggle('off',m); sndBtn.setAttribute('aria-label',m?'소리 켜기':'소리 끄기'); sndBtn.title=m?'소리 켜기 (M)':'소리 끄기 (M)';
+  if(AC&&master) master.gain.setTargetAtTime(m?0:0.85,AC.currentTime,0.02);
+  if(m){ if(TTS.ok){ try{ speechSynthesis.cancel(); }catch(e){} } }
+  else if(AC&&AC.state!=='running'&&AC.state!=='closed'&&!document.hidden){ try{ const p=AC.resume(); if(p&&p.catch) p.catch(()=>{}); }catch(e){} } }
+sndBtn.addEventListener('click',ev=>{ ev.stopPropagation(); setMuted(!muted); });
+window.addEventListener('keydown',ev=>{ if(ev.repeat||ev.ctrlKey||ev.metaKey||ev.altKey) return; if(ev.code==='KeyM'||ev.key==='m'||ev.key==='M'||ev.key==='ㅡ') setMuted(!muted); });
 const SFX={
   sobCut(){ const p=rand(1.0,1.6); tn({type:'sawtooth',f:340*p,f2:470*p,g:0.06,dur:0.07,lp:1500}); },
   burst(pw){ if(!AC) return; const now=AC.currentTime; if(now-lastSplat<0.035){ splatN++; if(splatN>5) return; } else splatN=0; lastSplat=now; pw=pw||1; const p=rand(0.85,1.2);

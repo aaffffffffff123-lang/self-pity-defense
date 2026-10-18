@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥲</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@500;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gaegu:wght@700&family=Noto+Sans+KR:wght@500;700;900&display=swap" rel="stylesheet">
 <style>
 :root{--ink:#24201E;--cream:#FFF4D6;--red:#E23744;--blue:#2F6BFF;--paper:#FFFFFF;--sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -81,6 +81,11 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 
 .speech{border:1px solid rgba(36,32,30,.16);background:#fff;box-shadow:0 2px 0 rgba(36,32,30,.08);padding:4px 9px!important;max-width:calc(100vw - 24px)}
 .speech::after{content:"";position:absolute;left:var(--tail,50%);top:100%;margin-left:-5px;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid #fff;filter:drop-shadow(0 1px 0 rgba(36,32,30,.18))}
+
+.speech.chatter{border-color:rgba(36,32,30,.38);border-radius:999px;padding:4px 10px!important;font-family:'Gaegu','Apple SD Gothic Neo','Noto Sans KR',sans-serif;line-height:1.05;letter-spacing:.1px;text-align:left;box-shadow:0 2px 0 rgba(36,32,30,.1),0 4px 10px rgba(36,32,30,.06)}
+.speech.chatter::before{content:attr(data-full);display:block;visibility:hidden;white-space:nowrap}
+.speech.chatter .chatterText{position:absolute;left:10px;top:50%;transform:translateY(-52%);white-space:nowrap}
+.speech.chatter::after{top:calc(100% - 1px);margin-left:-5px;border-left-width:5px;border-right-width:5px;border-top-width:7px;filter:drop-shadow(0 1px 0 rgba(36,32,30,.35))}
 .box h1{margin-bottom:20px}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
@@ -214,10 +219,213 @@ function tn(o){ if(!AC) return; const t=AC.currentTime+(o.when||0);
 let lastSplat=0, splatN=0;
 // 소리 켜기/끄기 버튼 (PC는 M 키). 새로 열 때마다 켜진 상태로 시작합니다.
 let muted=false;
+
+
+const ACTIVE_TALK=new Set();
+const TALK_TIME={syl:.072,space:.05,punct:.17};
+
+function talkSteps(text,speed=1){
+  const steps=[]; let t=0;
+  for(const ch of Array.from(String(text))){
+    const kind=/\s/.test(ch)?'space':/[.,!?…~]/.test(ch)?'punct':'syl';
+    steps.push({ch,kind,t});
+    t+=TALK_TIME[kind]/speed;
+  }
+  return {steps,total:t};
+}
+
+const TALK_VOWEL={
+  a:[820,1320],e:[540,1900],eo:[640,1060],
+  o:[470,860],u:[370,900],eu:[410,1450],i:[310,2400]
+};
+const TALK_JUNG=['a','e','a','e','eo','e','eo','e','o','a','e','e','o','u','eo','e','i','u','eu','i','i'];
+const TALK_CHO=['stop','stop','nasal','stop','stop','liquid','nasal','stop','stop','hiss','hiss','none','hiss','hiss','hiss','stop','stop','stop','breath'];
+
+function talkSound(ch){
+  const cp=ch.codePointAt(0);
+  if(cp<0xAC00||cp>0xD7A3) return {v:'eu',on:'none',coda:false};
+  const k=cp-0xAC00;
+  return {
+    v:TALK_JUNG[Math.floor((k%588)/28)],
+    on:TALK_CHO[Math.floor(k/588)],
+    coda:k%28!==0
+  };
+}
+
+function animalTalk(text,o={}){
+  const speed=o.speed||1;
+  const plan=talkSteps(text,speed);
+  const silent={...plan,t0:null,stop(){}};
+
+  if(!AC||!master||!noiseBuf||muted||AC.state==='closed') return silent;
+
+  const pitch=o.pitch||620;
+  const formant=o.formant||1.4;
+  const gain=Math.max(0,Math.min(.025,o.gain??.018));
+  const t0=AC.currentTime+.018;
+  const out=AC.createGain();
+  const live=new Set();
+
+  let closed=false;
+  let stopping=false;
+  let handle;
+
+  out.gain.value=gain;
+  out.connect(master);
+
+  function finish(){
+    if(closed) return;
+    closed=true;
+    try{ out.disconnect(); }catch(e){}
+    live.clear();
+    ACTIVE_TALK.delete(handle);
+  }
+
+  function track(src){
+    live.add(src);
+    src.onended=()=>{
+      live.delete(src);
+      try{ src.disconnect(); }catch(e){}
+      if(!live.size) finish();
+    };
+  }
+
+  function stop(hard=false){
+    if(closed||(stopping&&!hard)) return;
+    stopping=true;
+    const now=AC.currentTime;
+
+    if(hard){
+      try{
+        out.gain.cancelScheduledValues(now);
+        out.gain.setValueAtTime(0,now);
+      }catch(e){}
+
+      for(const src of [...live]){
+        src.onended=null;
+        try{ src.stop(now); }catch(e){}
+        try{ src.disconnect(); }catch(e){}
+      }
+      finish();
+      return;
+    }
+
+    try{
+      out.gain.cancelScheduledValues(now);
+      out.gain.setValueAtTime(Math.max(.0001,out.gain.value),now);
+      out.gain.exponentialRampToValueAtTime(.0001,now+.025);
+    }catch(e){}
+
+    for(const src of [...live]){
+      try{ src.stop(now+.03); }catch(e){}
+    }
+    if(!live.size) finish();
+  }
+
+  handle={...plan,t0,stop};
+  ACTIVE_TALK.add(handle);
+
+  const syllables=plan.steps.filter(s=>s.kind==='syl');
+  const ask=/\?\s*$/.test(String(text));
+
+  syllables.forEach((st,i)=>{
+    const S=talkSound(st.ch);
+    const F=TALK_VOWEL[S.v];
+    const t=t0+st.t;
+
+    let pm=1+.045*Math.sin(i*1.9+pitch*.013)+(Math.random()-.5)*.04;
+    if(S.v==='i') pm*=1.05;
+    else if(S.v==='o'||S.v==='u') pm*=.96;
+    if(i===syllables.length-1) pm*=ask?1.16:.92;
+
+    let vt=t;
+
+    if(S.on==='hiss'||S.on==='breath'||S.on==='stop'){
+      const src=AC.createBufferSource();
+      const f=AC.createBiquadFilter();
+      const g=AC.createGain();
+      const len=S.on==='stop'?.008:S.on==='hiss'?.022:.016;
+
+      src.buffer=noiseBuf;
+      f.type=S.on==='hiss'?'highpass':'bandpass';
+      f.frequency.value=S.on==='hiss'?4800:S.on==='stop'?2600:1700;
+      f.Q.value=S.on==='hiss'?.7:1.1;
+
+      g.gain.setValueAtTime(.0001,t);
+      g.gain.exponentialRampToValueAtTime(
+        S.on==='stop'?.35:S.on==='hiss'?.2:.14,
+        t+.002
+      );
+      g.gain.exponentialRampToValueAtTime(.0001,t+len);
+
+      src.connect(f);
+      f.connect(g);
+      g.connect(out);
+      track(src);
+
+      src.start(t,Math.random()*Math.max(.01,noiseBuf.duration-.05));
+      src.stop(t+len+.015);
+
+      if(S.on!=='stop') vt=t+len*.5;
+    }
+
+    const len=Math.max(
+      .026,
+      TALK_TIME.syl/speed*(S.coda?.68:.82)-(vt-t)
+    );
+
+    const src=AC.createOscillator();
+    const b1=AC.createBiquadFilter();
+    const b2=AC.createBiquadFilter();
+    const g1=AC.createGain();
+    const g2=AC.createGain();
+    const env=AC.createGain();
+
+    src.type='sawtooth';
+    src.frequency.setValueAtTime(
+      pitch*pm*(S.on==='liquid'?.96:1.06),
+      vt
+    );
+    src.frequency.exponentialRampToValueAtTime(pitch*pm*.98,vt+len);
+
+    b1.type=b2.type='bandpass';
+    b1.frequency.value=F[0]*formant;
+    b1.Q.value=4;
+    b2.frequency.value=F[1]*formant;
+    b2.Q.value=6;
+    g1.gain.value=1;
+    g2.gain.value=S.on==='nasal'?.32:.68;
+
+    env.gain.setValueAtTime(.0001,vt);
+    env.gain.exponentialRampToValueAtTime(1,vt+.005);
+    env.gain.setValueAtTime(1,vt+len*.58);
+    env.gain.exponentialRampToValueAtTime(.0001,vt+len);
+
+    src.connect(b1);
+    b1.connect(g1);
+    g1.connect(env);
+    src.connect(b2);
+    b2.connect(g2);
+    g2.connect(env);
+    env.connect(out);
+    track(src);
+
+    src.start(vt);
+    src.stop(vt+len+.015);
+  });
+
+  if(!live.size) finish();
+  return handle;
+}
+
+function stopAllAnimalTalk(hard=false){
+  for(const voice of [...ACTIVE_TALK]) voice.stop(hard);
+}
+
 const sndBtn=$('sndBtn');
 function setMuted(m){ muted=m; sndBtn.classList.toggle('off',m); sndBtn.setAttribute('aria-label',m?'소리 켜기':'소리 끄기'); sndBtn.title=m?'소리 켜기 (M)':'소리 끄기 (M)';
   if(AC&&master) master.gain.setTargetAtTime(m?0:0.85,AC.currentTime,0.02);
-  if(m){ if(TTS.ok){ try{ speechSynthesis.cancel(); }catch(e){} } }
+  if(m){ stopAllAnimalTalk(true); if(TTS.ok){ try{ speechSynthesis.cancel(); }catch(e){} } }
   else if(AC&&AC.state!=='running'&&AC.state!=='closed'&&!document.hidden){ try{ const p=AC.resume(); if(p&&p.catch) p.catch(()=>{}); }catch(e){} } }
 sndBtn.addEventListener('click',ev=>{ ev.stopPropagation(); setMuted(!muted); });
 window.addEventListener('keydown',ev=>{ if(ev.repeat||ev.ctrlKey||ev.metaKey||ev.altKey) return; if(ev.code==='KeyM'||ev.key==='m'||ev.key==='M'||ev.key==='ㅡ') setMuted(!muted); });
@@ -276,6 +484,124 @@ const SFX={
   squeeze(){ if(!AC) return; const t=AC.currentTime; const os=AC.createOscillator(); os.type='sine'; os.frequency.setValueAtTime(700,t); os.frequency.linearRampToValueAtTime(1150,t+0.55); os.frequency.linearRampToValueAtTime(820,t+0.9); const lfo=AC.createOscillator(); lfo.frequency.value=17; const lg=AC.createGain(); lg.gain.value=60; lfo.connect(lg); lg.connect(os.frequency); const g=AC.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.09,t+0.08); g.gain.setValueAtTime(0.09,t+0.8); g.gain.exponentialRampToValueAtTime(0.0001,t+0.95); os.connect(g); g.connect(master); os.start(t); lfo.start(t); os.stop(t+1); lfo.stop(t+1); for(let i=0;i<3;i++) tn({type:'sawtooth',f:rand(200,260),f2:rand(150,190),g:0.04,dur:0.2,when:0.1+i*0.28,lp:1000,q:9}); },
   pop(){ tn({type:'sine',f:380,f2:1100,g:0.25,dur:0.09}); nz({type:'bandpass',f:1500,f2:600,q:2,g:0.2,dur:0.08}); tn({type:'sine',f:120,f2:60,g:0.3,dur:0.14,when:0.03}); },
   patter(v){ nz({type:'bandpass',f:rand(1200,2600),q:1.5,g:v,dur:0.02}); },
+
+  // 머릿속으로 비집고 들어갈 때의 부드럽고 불쾌한 마찰음
+  enterWet(count,pressure,depth,pan,hard=false){
+    if(!AC||!master||!noiseBuf) return;
+    if(!this._enterWet&&!count) return;
+
+    if(!this._enterWet){
+      const out=AC.createGain();
+      out.gain.value=0;
+
+      const panner=AC.createStereoPanner
+        ? AC.createStereoPanner()
+        : null;
+
+      if(panner){
+        panner.pan.value=0;
+        out.connect(panner);
+        panner.connect(master);
+      } else {
+        out.connect(master);
+      }
+
+      // 살갗을 문지르며 미끄러지는 낮은 마찰음
+      const src=AC.createBufferSource();
+      const rub=AC.createBiquadFilter();
+      const soft=AC.createBiquadFilter();
+      const rubG=AC.createGain();
+
+      src.buffer=noiseBuf;
+      src.loop=true;
+      src.playbackRate.value=0.82;
+
+      rub.type='bandpass';
+      rub.frequency.value=620;
+      rub.Q.value=0.75;
+
+      soft.type='lowpass';
+      soft.frequency.value=1050;
+      soft.Q.value=0.65;
+
+      rubG.gain.value=0.78;
+
+      src.connect(rub);
+      rub.connect(soft);
+      soft.connect(rubG);
+      rubG.connect(out);
+
+      // 안쪽으로 눌려 들어가는 낮은 울림
+      const tone=AC.createOscillator();
+      const toneF=AC.createBiquadFilter();
+      const toneG=AC.createGain();
+      const wob=AC.createOscillator();
+      const wobG=AC.createGain();
+
+      tone.type='triangle';
+      tone.frequency.value=104;
+
+      toneF.type='lowpass';
+      toneF.frequency.value=260;
+
+      toneG.gain.value=0.28;
+
+      wob.type='sine';
+      wob.frequency.value=4.7;
+      wobG.gain.value=3.2;
+
+      wob.connect(wobG);
+      wobG.connect(tone.frequency);
+      tone.connect(toneF);
+      toneF.connect(toneG);
+      toneG.connect(out);
+
+      src.start(0,Math.random()*noiseBuf.duration);
+      tone.start();
+      wob.start();
+
+      this._enterWet={
+        out,panner,rub,soft,tone,
+        src,wob
+      };
+    }
+
+    const s=this._enterWet;
+    const now=AC.currentTime;
+
+    const aim=(param,value,time)=>{
+      if(hard){
+        param.cancelScheduledValues(now);
+        param.setValueAtTime(value,now);
+        return;
+      }
+
+      if(param.cancelAndHoldAtTime){
+        param.cancelAndHoldAtTime(now);
+      } else {
+        param.cancelScheduledValues(now);
+        param.setValueAtTime(param.value,now);
+      }
+
+      param.setTargetAtTime(value,now,time);
+    };
+
+    // 여러 명이 동시에 들어가도 소리가 무한히 커지지 않게 제한
+    const crowd=count ? 1+0.26*Math.log2(count) : 0;
+    const volume=count
+      ? Math.min(0.065,0.04*pressure*crowd)
+      : 0;
+
+    aim(s.out.gain,volume,count?0.035:0.075);
+    aim(s.rub.frequency,lerp(720,310,depth),0.045);
+    aim(s.soft.frequency,lerp(1250,560,depth),0.055);
+    aim(s.tone.frequency,lerp(108,68,depth),0.05);
+
+    if(s.panner){
+      aim(s.panner.pan,clamp(pan,-0.55,0.55),0.07);
+    }
+  },
+
   setMurmur(v){ if(!AC||!murmurG) return; murmurG.gain.setTargetAtTime(v,AC.currentTime,0.25); },
 };
 
@@ -1124,6 +1450,53 @@ function finishEnter(e){
   G.gnawPulse=1;
   removeEnemy(e);
 }
+
+function updateEnterWetSound(hard=false){
+  const turn=0.28;
+  let count=0;
+  let pressure=0;
+  let depth=0;
+  let pan=0;
+  let weight=0;
+
+  for(const e of EN.list){
+    if(!e.alive||e.state!=='enter') continue;
+
+    const p=clamp(e.t/CFG.ENTER_TIME,0,1);
+
+    // 앞 28%는 머리 쪽으로 방향만 트는 구간이라 무음
+    if(p<turn) continue;
+
+    const k=ease((p-turn)/(1-turn));
+    const w=Math.pow(
+      Math.max(0,Math.sin(Math.PI*k)),
+      0.7
+    );
+
+    if(w<=0.0001) continue;
+
+    count++;
+    pressure+=w;
+    depth+=k*w;
+
+    const x=e.enterPoint
+      ? (e.enterPoint.x-HEADW.c.x)/HEADW.r.x
+      : 0;
+
+    pan+=clamp(x,-1,1)*w;
+    weight+=w;
+  }
+
+  SFX.enterWet(
+    count,
+    count?pressure/count:0,
+    weight?depth/weight:0,
+    weight?pan/weight:0,
+    hard
+  );
+}
+
+
 function knockEnemy(e,fx,fz,pw){
   if(e.state==='fly'||e.state==='enter'||e.state==='intro') return;
   e.state='fly'; e.t=0; e.vx=fx*pw; e.vz=fz*pw; e.vy=0.7+pw*0.35; e.rx=0; e.ry=e.yaw; e.rz=0; e.vrx=rand(-10,10); e.vry=rand(-5,5); e.vrz=rand(-10,10);
@@ -1625,7 +1998,7 @@ function updEntrances(dt){
 }
 
 function allSpawned(){ return G.spawnIdx>=G.spawns.length&&G.extra.length===0; }
-function clearEnemies(){ for(const b of bubbles) b.el.remove(); bubbles.length=0; for(const e of EN.list){ e.alive=false; if(e.bubble) e.bubble.remove(); } EN.list.length=0; }
+function clearEnemies(){SFX.enterWet(0,0,0,0,true); clearBubbles(true); for(const e of EN.list){ e.alive=false; if(e.bubble){ e.bubble.remove(); e.bubble=null; } } EN.list.length=0; }
 function cloneRetryVisual(root){
   const copy=root.clone(true);
   copy.traverse(o=>{
@@ -1847,6 +2220,7 @@ function updEnemies(dt){
     else if(e.state==='leave'){ e.scale=Math.max(0,e.scale-dt*1.6); e.y=groundY(e.x,e.z)+(1-e.scale)*0.02; if(e.scale<=0.02) removeEnemy(e); }
     else if(e.state==='wander'){ if(!e.tgt||e.t>rand(6,9)){ const tz=rand(-3.2,-0.9); e.tgt=[rand(-1,1)*walkW(tz)*0.8,tz]; e.t=0; } let dx=e.tgt[0]-e.x, dz=e.tgt[1]-e.z; const d=Math.hypot(dx,dz); if(d<0.05){ e.tgt=null; continue; } dx/=d; dz/=d; const nx=e.x+(dx*e.speed+e.sx)*dt, nz=e.z+(dz*e.speed+e.sz)*dt; if(FF.isBase(nx,nz)){ e.tgt=null; continue; } e.vx=dx*e.speed; e.vz=dz*e.speed; e.x=nx; e.z=nz; pushOutOfTowers(e); e.y=groundY(e.x,e.z); e.anim+=dt*(e.speed*40+1.5); const ty=Math.atan2(e.vx,e.vz); let dd=ty-e.yaw; dd=Math.atan2(Math.sin(dd),Math.cos(dd)); e.yaw+=dd*Math.min(1,dt*6); }
   }
+  updateEnterWetSound();
 }
 function updTowers(dt){
   for(const t of towers.slice()){
@@ -2096,6 +2470,7 @@ function skipCut(){
 function updCry(dt){
   const c=CRY; c.t+=dt; const t=c.t;
   for(let i=EN.list.length-1;i>=0;i--){ const e=EN.list[i]; if(e.state==='enter'){ e.t+=dt; e.anim+=dt*14; placeEntering(e); if(e.t>=CFG.ENTER_TIME) finishEnter(e); } }
+  updateEnterWetSound();
   for(let i=0;i<2;i++){ const B=beads[i], s=B.side; const cornerD=new V3(s*0.66,0.86,-0.12).normalize(), earD=new V3(s*0.98,-0.02,-0.08).normalize();
     if(t<0.6){ const k=t/0.6; B.mesh.visible=true; const p=surfPointW(cornerD); B.mesh.position.copy(p); B.mesh.scale.setScalar(0.004+k*0.006); }
     else if(t<1.9){ const k=easeIn((t-0.6)/1.3); const d=cornerD.clone().lerp(earD,k).normalize(); const p=surfPointW(d); B.mesh.position.copy(p); B.mesh.scale.setScalar(0.009);
@@ -2170,24 +2545,152 @@ function updMini(c,t,dt){
   const bt=t-MINI.say; jjiBubble.style.opacity=Math.min(1,bt*6,(MINI.sayEnd-t)*4);
   jjiBubble.style.transform='translate(-50%,-100%) scale('+(1+Math.max(0,0.35-bt)*1.2)+')';
 }
+
 // speech bubbles
 let bubbles=[];
-// 대사 뽑기: 13개를 섞어 한 바퀴 다 쓴 뒤 다시 섞음. 지금 떠 있는 대사와 바로 전 대사는 건너뜀.
+
+// 대사 13개를 한 바퀴씩 섞어 사용합니다.
 let lineBag=[], lastLine='';
-function shuffled(a){ a=a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); const t=a[i]; a[i]=a[j]; a[j]=t; } return a; }
+
+function shuffled(a){
+  a=a.slice();
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    const t=a[i];
+    a[i]=a[j];
+    a[j]=t;
+  }
+  return a;
+}
+
 function nextLine(){
-  const busy=new Set(bubbles.map(b=>b.el.textContent)); if(LINES.length>busy.size+1) busy.add(lastLine);
+  const busy=new Set(bubbles.map(b=>b.text));
+  if(LINES.length>busy.size+1) busy.add(lastLine);
+
   let i=lineBag.findIndex(l=>!busy.has(l));
-  if(i<0){ lineBag=lineBag.concat(shuffled(LINES)); i=lineBag.findIndex(l=>!busy.has(l)); }
+  if(i<0){
+    lineBag=lineBag.concat(shuffled(LINES));
+    i=lineBag.findIndex(l=>!busy.has(l));
+  }
+
   if(i<0) return lastLine=pick(LINES);
   return lastLine=lineBag.splice(i,1)[0];
 }
-function updateBubbles(dt){
-  for(let i=bubbles.length-1;i>=0;i--){ const b=bubbles[i]; b.t-=dt; if(b.t<=0||!b.e.alive||b.e.state!=='walk'){ b.el.remove(); b.e.bubble=null; bubbles.splice(i,1); continue; }
-    projectTo(b.e.x,b.e.y+0.2,b.e.z,scr); const bw=b.el.offsetWidth, bx=clamp(scr.x,12+bw/2,window.innerWidth-12-bw/2); b.el.style.left=bx+'px'; b.el.style.top=(scr.y-8)+'px'; b.el.style.setProperty('--tail',clamp(scr.x-bx+bw/2,8,bw-8)+'px'); b.el.style.opacity=Math.min(1,b.t*3,(2.6-b.t)*4); }
-  if(G.scene!=='play') return;
-  if(bubbles.length<3&&Math.random()<dt*0.9){ const cands=EN.list.filter(e=>e.state==='walk'&&!e.bubble&&e.z>ROOM.z0+0.7&&e.z<-0.5); if(cands.length){ const e=pick(cands); const el=document.createElement('div'); el.className='badge speech'; el.style.transform='translate(-50%,-100%)'; el.style.fontSize='12px'; el.style.fontWeight='700'; el.style.padding='3px 9px'; el.textContent=nextLine(); labelsEl.appendChild(el); const b={e,el,t:2.6}; e.bubble=el; bubbles.push(b); SFX.heuk(0.03); } }
+
+function dropBubble(i,hard=false){
+  const b=bubbles[i];
+  if(!b) return;
+
+  if(b.voice) b.voice.stop(hard);
+  b.el.remove();
+
+  if(b.e.bubble===b.el) b.e.bubble=null;
+  bubbles.splice(i,1);
 }
+
+function clearBubbles(hard=false){
+  for(let i=bubbles.length-1;i>=0;i--) dropBubble(i,hard);
+}
+
+function updateBubbles(dt){
+  for(let i=bubbles.length-1;i>=0;i--){
+    const b=bubbles[i];
+
+    if(b.voice.t0!=null&&AC) b.age=AC.currentTime-b.voice.t0;
+    else b.age+=dt;
+
+    const elapsed=Math.max(0,b.age);
+    b.t=b.life-elapsed;
+
+    if(
+      G.scene!=='play'||
+      b.t<=0||
+      !b.e.alive||
+      b.e.state!=='walk'
+    ){
+      dropBubble(i);
+      continue;
+    }
+
+    while(
+      b.next<b.steps.length&&
+      b.steps[b.next].t<=b.age
+    ){
+      b.typed.textContent+=b.steps[b.next++].ch;
+    }
+
+    projectTo(b.e.x,b.e.y+.2,b.e.z,scr);
+
+    const bw=b.el.offsetWidth;
+    const bx=clamp(
+      scr.x,
+      12+bw/2,
+      window.innerWidth-12-bw/2
+    );
+
+    b.el.style.left=bx+'px';
+    b.el.style.top=(scr.y-8)+'px';
+    b.el.style.setProperty(
+      '--tail',
+      clamp(scr.x-bx+bw/2,8,bw-8)+'px'
+    );
+    b.el.style.opacity=Math.min(1,b.t*3,elapsed*4);
+  }
+
+  if(G.scene!=='play') return;
+
+  if(bubbles.length<3&&Math.random()<dt*.9){
+    const cands=EN.list.filter(
+      e=>
+        e.state==='walk'&&
+        !e.bubble&&
+        e.z>ROOM.z0+.7&&
+        e.z<-.5
+    );
+
+    if(cands.length){
+      const e=pick(cands);
+      const text=nextLine();
+      const v=e.seed%1;
+
+      const voice=animalTalk(text,{
+        speed:1.18+v*.16,
+        pitch:600+v*140,
+        formant:1.35+v*.15,
+        gain:.018
+      });
+
+      const el=document.createElement('div');
+      el.className='badge speech chatter';
+      el.style.transform='translate(-50%,-100%)';
+      el.style.fontSize='12px';
+      el.style.fontWeight='700';
+      el.dataset.full=text;
+      el.innerHTML='<span class="chatterText"></span>';
+      el.setAttribute('aria-label',text);
+      labelsEl.appendChild(el);
+
+      const life=Math.max(2.6,voice.total+1.05);
+      const b={
+        e,
+        el,
+        text,
+        typed:el.firstElementChild,
+        steps:voice.steps,
+        next:0,
+        age:voice.t0==null?0:AC.currentTime-voice.t0,
+        t:life,
+        life,
+        voice
+      };
+
+      e.bubble=el;
+      bubbles.push(b);
+    }
+  }
+}
+
+
 
 const TITLE_SVG=(()=>{
   const FONT="'Black Han Sans','Noto Sans KR',sans-serif";

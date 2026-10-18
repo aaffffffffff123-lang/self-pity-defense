@@ -931,7 +931,7 @@ function addFaceDecal(u, size){
   else { m=faceDecals[faceDecalIdx]; faceDecalIdx=(faceDecalIdx+1)%40; m.geometry.dispose(); m.geometry=geo; m.material.map=pick(splatTexes); m.material.needsUpdate=true; }
   m.rotation.set(0,0,0);
 }
-function clearFaceDecals(){ for(const m of faceDecals){ GI.headG.remove(m); m.geometry.dispose(); } faceDecals.length=0; faceDecalIdx=0; }
+function clearFaceDecals(){ for(const m of faceDecals){ GI.headG.remove(m); disposeRetryVisual(m,true); } faceDecals.length=0; faceDecalIdx=0; }
 // tear overflow (game over) objects
 const cryG=new THREE.Group(); scene.add(cryG);
 const beads=[]; for(const s of [-1,1]){ const b=mesh(new THREE.SphereGeometry(1,14,10),M.tear,0,0,0); b.visible=false; cryG.add(b); const trail=[]; for(let i=0;i<7;i++){ const t=mesh(new THREE.SphereGeometry(1,8,6),M.tear,0,0,0); t.visible=false; cryG.add(t); trail.push(t); } beads.push({side:s,mesh:b,trail}); }
@@ -1260,7 +1260,7 @@ function chickenMesh(s){ s=s||1; const g=new THREE.Group(); const body=ellipsoid
 function buildFood(id, full){
   const g=new THREE.Group(); g.userData.foodId=id;
   if(id==='kimbap'){ if(full){ const bag=mesh(roundedBox(0.19,0.11,0.15,0.04,2),M.bag,0,0,0); g.add(bag); for(let i=0;i<4;i++){ const k=kimbapMesh(1); k.userData.ammoUnit=true; k.position.set(-0.06+i*0.04,0.048,rand(-0.02,0.02)); k.rotation.y=rand(-0.4,0.4); k.rotation.z=rand(-0.2,0.2); g.add(k); } } else { const bag=mesh(roundedBox(0.2,0.025,0.16,0.04,2),M.bag,0,0,0); bag.rotation.y=0.3; g.add(bag); g.add(mesh(new THREE.BoxGeometry(0.05,0.006,0.04),M.gim,0.05,0.004,0.03)); } }
-  else if(id==='ramen'){ if(full){ g.add(mesh(new THREE.CylinderGeometry(0.048,0.037,0.095,20),M.ramenCup,0,0.0475,0)); g.add(mesh(new THREE.CylinderGeometry(0.0492,0.0452,0.032,20),M.red,0,0.058,0)); const lid=mesh(new THREE.CylinderGeometry(0.05,0.05,0.004,20),M.ramenCup,0,0.098,0); lid.rotation.x=-0.5; lid.position.z=-0.02; lid.position.y=0.11; g.add(lid); const soup=mesh(new THREE.CylinderGeometry(0.045,0.045,0.006,16),std(0xE88A2A),0,0.092,0); soup.name='ramenFill'; g.add(soup); for(let i=0;i<5;i++){ const n=mesh(new THREE.TorusGeometry(0.012,0.004,6,10),std(0xF7D27A),rand(-0.02,0.02),0.095,rand(-0.02,0.02)); n.userData.ammoUnit=true; n.rotation.x=Math.PI/2; g.add(n); } } else { const cup=mesh(new THREE.CylinderGeometry(0.048,0.037,0.095,20),M.ramenCup,0,0.04,0); cup.rotation.z=Math.PI/2-0.15; cup.rotation.y=0.5; g.add(cup); const band=mesh(new THREE.CylinderGeometry(0.0492,0.0452,0.032,20),M.red,0,0.04,0); band.rotation.copy(cup.rotation); band.position.set(0.01,0.043,-0.005); g.add(band); } }
+  else if(id==='ramen'){ if(full){ g.add(mesh(new THREE.CylinderGeometry(0.048,0.037,0.095,20,1,true),M.ramenCup,0,0.0475,0)); g.add(mesh(new THREE.CylinderGeometry(0.0492,0.0452,0.032,20,1,true),M.red,0,0.058,0)); const lid=mesh(new THREE.CylinderGeometry(0.05,0.05,0.004,20),M.ramenCup,0,0.098,0); lid.rotation.x=-0.5; lid.position.z=-0.02; lid.position.y=0.11; g.add(lid); const fill=new THREE.Group(); fill.name='ramenFill'; fill.position.y=0.092; g.add(fill); fill.add(mesh(new THREE.CylinderGeometry(0.045,0.045,0.006,16),std(0xE88A2A),0,0,0)); for(let i=0;i<4;i++){ const n=mesh(new THREE.TorusGeometry(0.012,0.004,6,10),std(0xF7D27A),rand(-0.02,0.02),0.003,rand(-0.02,0.02)); n.userData.ammoUnit=true; n.rotation.x=Math.PI/2; fill.add(n); } } else { const cup=mesh(new THREE.CylinderGeometry(0.048,0.037,0.095,20),M.ramenCup,0,0.04,0); cup.rotation.z=Math.PI/2-0.15; cup.rotation.y=0.5; g.add(cup); const band=mesh(new THREE.CylinderGeometry(0.0492,0.0452,0.032,20),M.red,0,0.04,0); band.rotation.copy(cup.rotation); band.position.set(0.01,0.043,-0.005); g.add(band); } }
   else if(id==='fries'){ if(full){ g.add(mesh(new THREE.BoxGeometry(0.09,0.085,0.045),M.red,0,0.0425,0)); g.add(mesh(new THREE.BoxGeometry(0.096,0.02,0.05),M.red,0,0.085,0)); g.add(mesh(new THREE.BoxGeometry(0.03,0.02,0.002),M.yellow,0,0.05,0.024)); for(let i=0;i<9;i++){ const f=fryMesh(); f.userData.ammoUnit=true; f.position.set(-0.03+i*0.0075,0.11+rand(-0.01,0.015),rand(-0.012,0.012)); f.rotation.z=rand(-0.25,0.25); f.rotation.x=rand(-0.2,0.2); g.add(f); } } else { const box=mesh(new THREE.BoxGeometry(0.09,0.03,0.05),M.red,0,0.015,0); box.rotation.y=0.6; g.add(box); const f=fryMesh(); f.rotation.z=Math.PI/2; f.position.set(0.05,0.006,0.03); g.add(f); } }
   else if(id==='cola'){
   if(full){
@@ -1425,7 +1425,7 @@ function fireTower(t){
   else if(f.id==='ramen'){ const {best}=bestCluster(cands,f.splash); launchLob('ramen',p.x,p.y+0.1,p.z,best.x,best.z,0.5,0.35); SFX.ramenFire(); }
   else if(f.id==='cola'){ const close=cands.filter(e=>Math.hypot(e.x-t.x,e.z-t.z)<f.killR); if(close.length<(allSpawned()?1:4)){ t.pulse=0; return false; } const {best}=bestCluster(close,0.2); const dx=best.x-t.x, dz=best.z-t.z, l=Math.hypot(dx,dz)||1; colaSpray(t,dx/l,dz/l); }
   else if(f.id==='burger'){ const {dir,n}=bestLine(cands,t.x,t.z,f.roll,0.15); let near=false; for(const e of cands){ if(Math.hypot(e.x-t.x,e.z-t.z)<0.35){ near=true; break; } } if(n<2&&!near){ t.pulse=0; return false; } const b=burgerMesh(1); b.position.set(p.x,p.y+0.06,p.z); b.rotation.z=Math.PI/2; scene.add(b); projs.push({type:'burger',mesh:b,x:p.x,y:p.y+0.06,z:p.z,dx:dir[0],dz:dir[1],dist:0,max:f.roll,spd:1.25,roll:0,hit:new Set()}); SFX.burger(); }
-  else if(f.id==='pizza'){ const {dir,n}=bestLine(cands,t.x,t.z,f.range,0.16); let near=false; for(const e of cands){ if(Math.hypot(e.x-t.x,e.z-t.z)<0.35){ near=true; break; } } if(n<3&&!near){ t.pulse=0; return false; } const sl=pizzaSliceMesh(); sl.position.set(p.x,p.y+0.1,p.z); scene.add(sl); projs.push({type:'pizza',mesh:sl,x:p.x,y:p.y+0.1,z:p.z,dx:dir[0],dz:dir[1],dist:0,max:f.range+0.3,spd:2.3,spin:0,hit:new Set()}); const pz=t.full.getObjectByName('pizza'); if(pz){ pz.children.forEach((s,i)=>{ s.visible=i<t.ammo-1; }); } SFX.pizza(); }
+  else if(f.id==='pizza'){ const {dir,n}=bestLine(cands,t.x,t.z,f.range,0.16); let near=false; for(const e of cands){ if(Math.hypot(e.x-t.x,e.z-t.z)<0.35){ near=true; break; } } if(n<3&&!near){ t.pulse=0; return false; } const sl=pizzaSliceMesh(); sl.position.set(p.x,p.y+0.1,p.z); scene.add(sl); projs.push({type:'pizza',mesh:sl,x:p.x,y:p.y+0.1,z:p.z,dx:dir[0],dz:dir[1],dist:0,max:f.range+0.3,spd:2.3,spin:0,hit:new Set()});  SFX.pizza(); }
   else if(f.id==='chicken'){ if(projs.some(p=>p.type==='chicken')){ t.pulse=0; return false; }
     const {best,n}=bestCluster(cands,f.blast); let stuckNear=false; for(const e of cands){ if(e.state==='squat'&&Math.hypot(e.x-t.x,e.z-t.z)<0.4){ stuckNear=true; break; } }
     let need=f.minCrowd; if(allSpawned()){ let alive=0; for(const e of EN.list) if(e.alive&&(e.state==='walk'||e.state==='squat'||e.state==='climb'||e.state==='slip'||e.state==='intro')) alive++; need=Math.min(need,Math.max(1,Math.ceil(alive*0.5))); }
@@ -1460,7 +1460,7 @@ function chickenLand(pr){
   if(n) SFX.crush(); DEC.grease(x,z,0.5); burstParts(x,0.05,z,26,'#C98A2B',1.4,'crumb',0.007); zones.push({x,z,r:f.greaseR,t:f.grease,cd:0});
   pr.mesh.position.set(x,groundY(x,z)+0.03,z); pr.mesh.rotation.set(0,rand(0,6),rand(-0.3,0.3)); addTrash(pr.mesh);
 }
-function addTrash(m){ if(m.isGroup){ m.updateMatrixWorld(true); bakeGroup(m); } trash.push(m); if(trash.length>30){ const old=trash.shift(); scene.remove(old); } }
+function addTrash(m){ if(m.isGroup){ m.updateMatrixWorld(true); bakeGroup(m); } trash.push(m); if(trash.length>30){ const old=trash.shift(); removeTrashVisual(old); } }
 // 하루 지나면 놓아둔 음식이 상함: 일어나 나가는 동안 곰팡이 피고 주저앉음 → 문 닫히면 쓰레기로 남음
 const MOLD=new THREE.Color(0x6E7F3A), flyGeo=new THREE.SphereGeometry(0.012,6,5), flyMat=new THREE.MeshStandardMaterial({color:0x151515,roughness:0.4});
 let flies=[];
@@ -1596,7 +1596,8 @@ function setCake(day){
 function setEntrancesForDay(day){ setCake(day);
   const bathOpen=day>CFG.BATH.day, winOpen=day>CFG.WIN.day;
   BATHG.target=BATHG.ang=bathOpen?1:0; BATHG.hinge.rotation.y=-1.45*BATHG.ang;
-  WING.target=WING.open=winOpen?1:0; WING.ladderK=winOpen?1:0; ENTR.bathShake=ENTR.winShake=ENTR.doorKick=0; placeWindow();
+  BATHG.slamAt=0; WING.dropAt=0; WING.dropping=false;
+  WING.target=WING.open=winOpen?1:0; WING.ladderK=winOpen?1:0; ENTR.bathShake=ENTR.winShake=ENTR.doorKick=ENTR.flush=0; placeWindow();
 }
 function placeWindow(){ const k=WING.open; WING.sash[0].position.x=WING.sash0+k*((CFG.WIN.x1-CFG.WIN.x0)/2-0.01);
   const lad=WING.ladder, kk=WING.ladderK; lad.visible=kk>0.001;
@@ -1625,7 +1626,58 @@ function updEntrances(dt){
 
 function allSpawned(){ return G.spawnIdx>=G.spawns.length&&G.extra.length===0; }
 function clearEnemies(){ for(const b of bubbles) b.el.remove(); bubbles.length=0; for(const e of EN.list){ e.alive=false; if(e.bubble) e.bubble.remove(); } EN.list.length=0; }
-function snapshot(){ G.snap={money:G.money,kills:G.kills,fat:G.fat,round:G.round,tear:G.tear,stain:G.stain,debt:G.debt,towers:towers.map(t=>({id:t.food.id,x:t.x,z:t.z,ammo:t.ammo})),lumps:lumps.map(L=>({food:L.food,x:L.x,z:L.z,age:L.age}))}; }
+function cloneRetryVisual(root){
+  const copy=root.clone(true);
+  copy.traverse(o=>{
+    if(!o.isMesh) return;
+    if(o.geometry) o.geometry=o.geometry.clone();
+    if(Array.isArray(o.material)) o.material=o.material.map(m=>m?m.clone():m);
+    else if(o.material) o.material=o.material.clone();
+  });
+  return copy;
+}
+function disposeRetryVisual(root,disposeMaterials){
+  if(!root) return;
+  root.traverse(o=>{
+    if(!o.isMesh) return;
+    if(o.geometry) o.geometry.dispose();
+    if(disposeMaterials&&o.material){
+      const mats=Array.isArray(o.material)?o.material:[o.material];
+      for(const mat of mats) if(mat) mat.dispose();
+    }
+  });
+}
+function removeTrashVisual(root){
+  scene.remove(root);
+  disposeRetryVisual(root,!!root.userData.retryOwnsMaterials);
+}
+function clearTrash(){
+  for(const root of trash) removeTrashVisual(root);
+  trash.length=0;
+}
+function disposeSnapVisuals(s){
+  if(!s) return;
+  for(const root of s.trash||[]) disposeRetryVisual(root,true);
+  for(const root of s.faceDecals||[]) disposeRetryVisual(root,true);
+}
+function snapshot(){
+  const old=G.snap;
+  G.snap={
+    money:G.money,kills:G.kills,fat:G.fat,round:G.round,
+    tear:G.tear,stain:G.stain,debt:G.debt,
+    towers:towers.map(t=>({
+      id:t.food.id,x:t.x,z:t.z,ammo:t.ammo
+    })),
+    lumps:lumps.map(L=>({
+      food:L.food,x:L.x,z:L.z,age:L.age
+    })),
+    floor:fctx.getImageData(0,0,floorCv.width,floorCv.height),
+    trash:trash.map(cloneRetryVisual),
+    faceDecals:faceDecals.map(cloneRetryVisual),
+    faceDecalIdx
+  };
+  disposeSnapVisuals(old);
+}
 function startRound(r){
   G.round=r; const b=buildSpawns(r); G.spawns=b.list; G.cues=b.cues; G.cueIdx=0; G.extra=[]; G.kickAt=0; G.plan=b.plan; G.spawnIdx=0; G.t=0;
   G.party=(r+1===CFG.PARTY_DAY); setEntrancesForDay(r+1);
@@ -1633,8 +1685,76 @@ function startRound(r){
   doorRattle=0; SFX.setMurmur(0); clearEnemies(); snapshot(); hudDirty=true; showBar(true);
 }
 function fatFor(r){ return r<=8?r/8:Math.min(1.4,1+(r-8)*0.05); }
-function newRun(){ resetCommuteVisual(); G.party=false; G.tearCarry=0; G.stain=0; G.debt=0; G.loanN=0; setEntrancesForDay(1); clearLumps(); G.money=CFG.START_MONEY; G.kills=0; G.fat=0; G.round=0; G.tear=0; G.invaders=0; G.gnawPulse=0; GI.setFat(0); updHeadW(); GI.lie(); for(const t of towers.slice()) removeTower(t); for(const m of trash) scene.remove(m); trash.length=0; for(const p of projs) scene.remove(p.mesh); projs.length=0; zones.length=0; PT.list.length=0; clearFaceDecals(); paintFloorBase(); seedLumps(); SFX.setBuzz(flyCount()); FF.rebuild(towers); camMix=0; doorTarget=DOOR_GAP; for(const b of beads){ b.mesh.visible=false; b.trail.forEach(t=>t.visible=false); } for(const w of wetSpots){ w.visible=false; w.scale.setScalar(0.001); } setSelected(null); hideGhost(); }
-function restoreSnap(){ resetCommuteVisual(); setSelected(null); hideGhost(); GI.lie(); camMix=0; const s=G.snap; G.tearCarry=s.tear; G.stain=s.stain; G.debt=s.debt; G.tear=0; G.invaders=0; G.gnawPulse=0; G.money=s.money; G.kills=s.kills; G.fat=s.fat; GI.setFat(s.fat); updHeadW(); setStain(G.stain); for(const t of towers.slice()) removeTower(t); for(const st of s.towers) makeTower(st.id,st.x,st.z,st.ammo); clearLumps(); for(const L of s.lumps) makeLump(L.food,L.x,L.z,L.age); SFX.setBuzz(flyCount()); FF.rebuild(towers); for(const p of projs) scene.remove(p.mesh); projs.length=0; zones.length=0; PT.list.length=0; for(const b of beads){ b.mesh.visible=false; b.trail.forEach(t=>t.visible=false); } for(const w of wetSpots){ w.visible=false; w.scale.setScalar(0.001); } }
+function newRun(){ resetCommuteVisual(); G.party=false; G.tearCarry=0; G.stain=0; G.debt=0; G.loanN=0; setEntrancesForDay(1); clearLumps(); G.money=CFG.START_MONEY; G.kills=0; G.fat=0; G.round=0; G.tear=0; G.invaders=0; G.gnawPulse=0; GI.setFat(0); updHeadW(); GI.lie(); for(const t of towers.slice()) removeTower(t); clearTrash(); for(const p of projs) scene.remove(p.mesh); projs.length=0; zones.length=0; PT.list.length=0; clearFaceDecals(); paintFloorBase(); seedLumps(); SFX.setBuzz(flyCount()); FF.rebuild(towers); camMix=0; doorTarget=DOOR_GAP; for(const b of beads){ b.mesh.visible=false; b.trail.forEach(t=>t.visible=false); } for(const w of wetSpots){ w.visible=false; w.scale.setScalar(0.001); } setSelected(null); hideGhost(); }
+function restoreSnap(){
+  resetCommuteVisual(); setSelected(null); hideGhost(); GI.lie(); camMix=0;
+  const s=G.snap;
+
+  G.tearCarry=s.tear;
+  G.stain=s.stain;
+  G.debt=s.debt;
+  G.tear=0;
+  G.invaders=0;
+  G.gnawPulse=0;
+  G.money=s.money;
+  G.kills=s.kills;
+  G.fat=s.fat;
+
+  GI.setFat(s.fat);
+  updHeadW();
+  setStain(G.stain);
+
+  for(const t of towers.slice()) removeTower(t);
+  for(const st of s.towers) makeTower(st.id,st.x,st.z,st.ammo);
+
+  clearLumps();
+  for(const L of s.lumps) makeLump(L.food,L.x,L.z,L.age);
+
+  for(const p of projs) scene.remove(p.mesh);
+  projs.length=0;
+  zones.length=0;
+  PT.list.length=0;
+
+  clearTrash();
+  for(const saved of s.trash||[]){
+    const m=cloneRetryVisual(saved);
+    m.userData.retryOwnsMaterials=true;
+    scene.add(m);
+    trash.push(m);
+  }
+
+  clearFaceDecals();
+  for(const saved of s.faceDecals||[]){
+    const m=cloneRetryVisual(saved);
+    GI.headG.add(m);
+    faceDecals.push(m);
+  }
+  faceDecalIdx=faceDecals.length>=40
+    ?(s.faceDecalIdx||0)%faceDecals.length
+    :0;
+
+  for(const b of beads){
+    b.mesh.visible=false;
+    b.trail.forEach(t=>t.visible=false);
+  }
+  for(const w of wetSpots){
+    w.visible=false;
+    w.scale.setScalar(0.001);
+  }
+
+  SFX.setBuzz(flyCount());
+  FF.rebuild(towers);
+
+  if(s.floor){
+    fctx.setTransform(1,0,0,1,0,0);
+    fctx.globalAlpha=1;
+    fctx.globalCompositeOperation='source-over';
+    fctx.putImageData(s.floor,0,0);
+    floorDirty=false;
+    floorDirtyT=0;
+    floorTex.needsUpdate=true;
+  }
+}
 function endRound(){ G.tearCarry=Math.min(0.6,G.tear*CFG.TEAR_CARRY); G.stain+=G.tear; setStain(G.stain); drag=null; G.scene='cut'; CUT={t:0,walkPh:0,counted:false,paid:false,debtFloat:0,debtFloatAt:Infinity,debtShown:false,doorOpened:false,doorClosed:false,reopened:false,closed2:false,T:cutTimes(G.fat,fatFor(G.round+1)),lastStep:0}; showBar(false); SFX.setMurmur(0); hideGhost(); }
 function startCry(){ drag=null; G.scene='cry'; CRY={t:0,dropped:[false,false],mini:null,jji:false}; showBar(false); SFX.setMurmur(0); hideGhost(); setSelected(null); SFX.tearDrop(); for(const e of EN.list){ if(e.bubble){ e.bubble.remove(); e.bubble=null; } } }
 

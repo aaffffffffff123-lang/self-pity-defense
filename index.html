@@ -76,6 +76,19 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 #cleanBtn.warn{animation:cleanPulse 1.1s ease-in-out infinite}
 #cleanBtn:active{transform:scale(.96)}
 @keyframes cleanPulse{0%,100%{transform:none;box-shadow:0 2px 0 rgba(90,60,0,.14)}50%{transform:scale(1.08);box-shadow:0 0 0 4px rgba(226,55,68,.28)}}
+/* actual loan control: a DOM speech bubble tethered to the phone, above food and the ultimate */
+#loanWrap{--tail:50%;position:absolute;z-index:19;display:none;transform:translate(-50%,-100%);pointer-events:auto;filter:drop-shadow(0 3px 8px rgba(36,32,30,.18))}
+#loanWrap.on{display:block}
+#loanWrap::after{content:"";position:absolute;left:var(--tail);top:calc(100% - 1px);margin-left:-7px;border-left:7px solid transparent;border-right:7px solid transparent;border-top:10px solid #fff;filter:drop-shadow(0 1px 0 rgba(47,107,255,.38))}
+#loanBtn{min-width:88px;min-height:48px;border:1px solid rgba(47,107,255,.42);border-radius:14px;padding:7px 12px 8px;background:rgba(255,255,255,.97);color:#1748B5;font:800 12px/1.2 'Noto Sans KR',sans-serif;box-shadow:0 0 0 3px rgba(47,107,255,.14);display:flex;flex-direction:column;align-items:flex-start;gap:1px;cursor:pointer;touch-action:manipulation}
+#loanBtn .ln2{font-size:15px;font-weight:900;color:#2F6BFF}
+#loanBtn:active{transform:scale(.96)}
+#loanWrap.open #loanBtn{background:#1748B5;color:#fff;box-shadow:0 0 0 3px rgba(47,107,255,.24)}
+#loanWrap.open #loanBtn .ln2{color:#DCE7FF}
+#loanChoices{position:absolute;left:50%;bottom:calc(100% + 9px);width:178px;transform:translateX(-50%);display:none;grid-template-columns:repeat(2,1fr);gap:6px;padding:8px;border-radius:14px;background:rgba(255,255,255,.98);box-shadow:0 4px 16px rgba(36,32,30,.2)}
+#loanWrap.open #loanChoices{display:grid}
+#loanChoices button{min-height:40px;border:1px solid rgba(47,107,255,.22);border-radius:10px;background:#EEF3FF;color:#1748B5;font:900 14px/1 'Noto Sans KR',sans-serif;cursor:pointer;touch-action:manipulation}
+#loanChoices button:active{transform:scale(.95);background:#DCE7FF}
 .box{pointer-events:auto;background:rgba(255,255,255,.97);border-radius:24px;padding:26px 30px 24px;text-align:center;box-shadow:0 6px 0 rgba(90,60,0,.16);min-width:min(82vw,340px)}
 .box h1{margin:0 0 4px;font-size:38px;font-weight:900;letter-spacing:-1.5px;line-height:1.08}
 .box h1 span{color:var(--red)}
@@ -123,7 +136,19 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 .hide{display:none!important}
  
 #dayFade{position:absolute;inset:0;background:#13151e;opacity:0;pointer-events:none}
-#hudRound{font-size:17px;padding:8px 13px}
+#hudRound{font-size:17px;padding:5px 6px 5px 12px;display:flex;align-items:center;gap:7px;pointer-events:auto}
+#pauseBtn{display:none;width:28px;height:28px;padding:0;border:0;border-radius:9px;background:rgba(36,32,30,.08);color:var(--ink);align-items:center;justify-content:center;gap:3px;cursor:pointer;touch-action:manipulation}
+#pauseBtn.on{display:flex}
+#pauseBtn i{display:block;width:3px;height:13px;border-radius:2px;background:currentColor}
+#pauseBtn:active{transform:scale(.92)}
+#pauseBtn:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+#pauseShade{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;background:rgba(19,21,30,.58);backdrop-filter:blur(2px);pointer-events:auto}
+#pauseShade.on{display:flex}
+#pauseShade .pauseBox{min-width:min(74vw,260px);padding:22px 24px 20px;border-radius:20px;background:rgba(255,255,255,.97);box-shadow:0 6px 0 rgba(36,32,30,.22);text-align:center}
+#pauseShade .pauseTitle{font-size:25px;font-weight:900;margin-bottom:14px}
+#resumeBtn{border:0;border-radius:13px;padding:11px 26px;background:var(--ink);color:#fff;font:800 16px/1 'Noto Sans KR',sans-serif;cursor:pointer;touch-action:manipulation}
+#resumeBtn:active{transform:scale(.96)}
+body.gamePaused #app *,body.gamePaused #app *::before,body.gamePaused #app *::after{animation-play-state:paused!important}
 .card .role{position:static;transform:none;background:none;color:var(--ink);padding:0;font-size:10px;line-height:1.1;white-space:nowrap;display:none;opacity:.62;pointer-events:none}
 .card.sel .am{display:none}
 .card.sel .role{display:block}
@@ -150,8 +175,6 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 .speech.chatter::before{content:attr(data-full);display:block;visibility:hidden;white-space:nowrap}
 .speech.chatter .chatterText{position:absolute;left:10px;top:50%;transform:translateY(-52%);white-space:nowrap}
 .speech.chatter::after{top:calc(100% - 1px);margin-left:-5px;border-left-width:5px;border-right-width:5px;border-top-width:7px;filter:drop-shadow(0 1px 0 rgba(36,32,30,.35))}
-.loanBadge{padding:6px 11px!important;border-color:rgba(47,107,255,.42);color:#1748B5;font-size:12px;box-shadow:0 0 0 3px rgba(47,107,255,.14),0 3px 10px rgba(36,32,30,.14);animation:loanPulse .85s ease-in-out infinite alternate}
-@keyframes loanPulse{from{transform:translate(-50%,-100%) scale(.96)}to{transform:translate(-50%,-100%) scale(1.06)}}
 .box h1{margin-bottom:20px}
 @media (max-width:360px){
   #bar{gap:2px;padding-left:calc(var(--sal) + 3px);padding-right:calc(var(--sar) + 3px)}
@@ -169,7 +192,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 <div id="dayFade"></div>
 
 <div id="hud">
-  <div class="pill" id="hudRound">1일</div>
+  <div class="pill" id="hudRound"><span id="hudRoundText">1일</span><button id="pauseBtn" type="button" title="일시정지 (P)" aria-label="게임 일시정지" aria-hidden="true" disabled><i></i><i></i></button></div>
   <div class="pill" id="hudMoney">0원<small id="hudDebt"></small></div>
 </div>
 <div id="labels"></div>
@@ -180,6 +203,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 <div id="overlay"></div>
 <button id="cutSkip" type="button" aria-label="출근 장면 건너뛰기" aria-hidden="true" disabled>출근 건너뛰기 ›</button>
 <button id="cleanBtn" type="button" aria-label="집청소 부르기"><span class="cl1">집청소</span><span class="cl2"></span></button>
+<div id="loanWrap" aria-hidden="true"><button id="loanBtn" type="button" aria-label="대출 금액 선택" aria-expanded="false"><span class="ln1">대출</span><span class="ln2">금액 선택</span></button><div id="loanChoices" role="menu" aria-label="대출 금액"><button type="button" role="menuitem" data-loan="30000">3만 원</button><button type="button" role="menuitem" data-loan="100000">10만 원</button><button type="button" role="menuitem" data-loan="300000">30만 원</button><button type="button" role="menuitem" data-loan="1000000">100만 원</button></div></div>
 <div id="ultScr"></div>
 <div id="ultWrap" aria-hidden="true"><canvas id="ultFx"></canvas><button id="selfHitBtn" type="button" aria-label="궁극기 게이지 0퍼센트" disabled><svg viewBox="0 0 100 100" aria-hidden="true">
 <defs>
@@ -220,6 +244,8 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 </svg></button></div>
 </div>
 
+<div id="pauseShade" aria-hidden="true"><div class="pauseBox" role="dialog" aria-modal="true" aria-label="게임 일시정지"><div class="pauseTitle">일시정지</div><button id="resumeBtn" type="button">계속하기</button></div></div>
+
 <button id="sndBtn" type="button" title="소리 끄기 (M)" aria-label="소리 끄기">
   <svg viewBox="0 0 24 24" fill="none" stroke="#24201E" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h3.5L12 5v14l-4.5-4H4z"/><path class="w" d="M15.5 9.5a3.5 3.5 0 0 1 0 5M18 7a7 7 0 0 1 0 10"/><path class="x" d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
 </button>
@@ -251,7 +277,7 @@ import * as THREE from 'three';
    CONFIG
    ========================================================= */
 const CFG = {
-  START_MONEY: 20000, LOAN: 30000, LOAN_BACK: 39000, BROKE: 3000, WEIGHT_GAIN_MULT: 0.45,
+  START_MONEY: 20000, LOAN: 30000, LOAN_OPTIONS: [30000,100000,300000,1000000], LOAN_RATE: 1.3, BROKE: 3000, WEIGHT_GAIN_MULT: 0.28,
   // A night shift at the 2026 minimum wage (10,320/h): 00:00-09:00 with an hour's break, six of the eight hours
   // before 06:00 at +50%. An hour late costs an hour of night pay. Five shifts make a week (all five worked: the
   // weekly allowance, one day's base pay); ten make a month here, so the bills come round within a run: the phone
@@ -333,7 +359,7 @@ if(TTS.ok){ TTS.pick(); speechSynthesis.addEventListener('voiceschanged',()=>TTS
 function audioInit(){
   TTS.unlock();
   try{
-    if(AC){ if(AC.state!=='running') AC.resume(); return; }
+    if(AC){ if(AC.state!=='running'&&!gamePaused) AC.resume(); return; }
     AC=new (window.AudioContext||window.webkitAudioContext)();
     const comp=AC.createDynamicsCompressor(); comp.threshold.value=-14; comp.ratio.value=4; comp.attack.value=0.003; comp.release.value=0.18;
     master=AC.createGain(); master.gain.value=muted?0:0.85; master.connect(comp); comp.connect(AC.destination);
@@ -360,7 +386,7 @@ function duckAnimalTalk(){
 }
 // 탭을 내리거나 다른 앱으로 넘어가면 소리를 전부 멈추고, 돌아오면 다시 켭니다.
 function audioSleep(){ if(TTS.ok){ try{ speechSynthesis.cancel(); }catch(e){} } if(AC&&AC.state==='running'){ try{ const p=AC.suspend(); if(p&&p.catch) p.catch(()=>{}); }catch(e){} } }
-function audioWake(){ if(AC&&!document.hidden&&AC.state!=='running'&&AC.state!=='closed'){ try{ const p=AC.resume(); if(p&&p.catch) p.catch(()=>{}); }catch(e){} } }
+function audioWake(){ if(AC&&!gamePaused&&!document.hidden&&AC.state!=='running'&&AC.state!=='closed'){ try{ const p=AC.resume(); if(p&&p.catch) p.catch(()=>{}); }catch(e){} } }
 document.addEventListener('visibilitychange',()=>{ if(document.hidden) audioSleep(); else audioWake(); });
 window.addEventListener('pagehide',audioSleep); window.addEventListener('pageshow',audioWake);
 // o.pan: -1 (left) … 1 (right), o.out: another bus instead of the master
@@ -377,7 +403,7 @@ function tn(o){ if(!AC) return; const t=AC.currentTime+(o.when||0);
   node.connect(g); g.connect(sfxOut(o)); os.start(t); os.stop(t+o.dur+0.05); }
 let lastSplat=0, splatN=0;
 // 소리 켜기/끄기 버튼 (PC는 M 키). 새로 열 때마다 켜진 상태로 시작합니다.
-let muted=false;
+let muted=false, gamePaused=false;
 
 
 const ACTIVE_TALK=new Set();
@@ -585,9 +611,36 @@ const sndBtn=$('sndBtn');
 function setMuted(m){ muted=m; sndBtn.classList.toggle('off',m); sndBtn.setAttribute('aria-label',m?'소리 켜기':'소리 끄기'); sndBtn.title=m?'소리 켜기 (M)':'소리 끄기 (M)';
   if(AC&&master) master.gain.setTargetAtTime(m?0:0.85,AC.currentTime,0.02);
   if(m){ stopAllAnimalTalk(true); if(TTS.ok){ try{ speechSynthesis.cancel(); }catch(e){} } }
-  else if(AC&&AC.state!=='running'&&AC.state!=='closed'&&!document.hidden){ try{ const p=AC.resume(); if(p&&p.catch) p.catch(()=>{}); }catch(e){} } }
+  else if(AC&&AC.state!=='running'&&AC.state!=='closed'&&!document.hidden&&!gamePaused){ try{ const p=AC.resume(); if(p&&p.catch) p.catch(()=>{}); }catch(e){} } }
 sndBtn.addEventListener('click',ev=>{ ev.stopPropagation(); setMuted(!muted); });
 window.addEventListener('keydown',ev=>{ if(ev.repeat||ev.ctrlKey||ev.metaKey||ev.altKey) return; if(ev.code==='KeyM'||ev.key==='m'||ev.key==='M'||ev.key==='ㅡ') setMuted(!muted); });
+const pauseBtn=$('pauseBtn'), pauseShade=$('pauseShade'), resumeBtn=$('resumeBtn');
+function canPause(){ return G.scene!=='title'&&G.scene!=='over'; }
+function updatePauseButton(){ const on=canPause()||gamePaused; pauseBtn.classList.toggle('on',on); pauseBtn.disabled=!on; pauseBtn.setAttribute('aria-hidden',String(!on)); }
+function setGamePaused(on){
+  on=!!on;
+  if(on&&!canPause()) return;
+  if(on===gamePaused) return;
+  gamePaused=on;
+  document.body.classList.toggle('gamePaused',on);
+  pauseShade.classList.toggle('on',on);
+  pauseShade.setAttribute('aria-hidden',String(!on));
+  pauseBtn.setAttribute('aria-label',on?'게임 계속하기':'게임 일시정지');
+  if(on){
+    if(typeof drag!=='undefined') drag=null;
+    if(typeof hideGhost==='function') hideGhost();
+    if(AC&&AC.state==='running'){ try{ const p=AC.suspend(); if(p&&p.catch) p.catch(()=>{}); }catch(e){} }
+    if(TTS.ok){ try{ speechSynthesis.pause(); }catch(e){} }
+  }else{
+    if(typeof last!=='undefined') last=performance.now();
+    if(AC&&AC.state!=='running'&&AC.state!=='closed'&&!document.hidden){ try{ const p=AC.resume(); if(p&&p.catch) p.catch(()=>{}); }catch(e){} }
+    if(TTS.ok&&!muted){ try{ speechSynthesis.resume(); }catch(e){} }
+  }
+  updatePauseButton();
+}
+pauseBtn.addEventListener('pointerdown',ev=>{ ev.stopPropagation(); ev.preventDefault(); if(!gamePaused) SFX.click(); setGamePaused(!gamePaused); });
+resumeBtn.addEventListener('pointerdown',ev=>{ ev.stopPropagation(); ev.preventDefault(); setGamePaused(false); SFX.click(); });
+window.addEventListener('keydown',ev=>{ if(ev.repeat||ev.ctrlKey||ev.metaKey||ev.altKey) return; if(ev.code==='KeyP'||ev.key==='p'||ev.key==='P'||ev.key==='ㅔ'){ ev.preventDefault(); setGamePaused(!gamePaused); } });
 const SFX={
   sobCut(){ const p=rand(1.0,1.6); tn({type:'sawtooth',f:340*p,f2:470*p,g:0.06,dur:0.07,lp:1500}); },
   burst(pw){ if(!AC) return; const now=AC.currentTime; if(now-lastSplat<0.035){ splatN++; if(splatN>5) return; } else splatN=0; lastSplat=now; pw=pw||1; const p=rand(0.85,1.2);
@@ -1681,14 +1734,20 @@ function makeGiant(){
     torso.scale.set(1.12+0.88*k,1+0.05*k,0.78+0.8*k);
     yoke.scale.set(0.215*(1+0.66*k),0.07*(1+0.55*k),0.125*(1+0.9*k)); yoke.position.y=0.445+0.012*k;
     hips.scale.set(0.205*(1+0.9*k),0.11*(1+0.4*k),0.145*(1+1.05*k));
-    const mb=clamp((k-0.12)/0.5,0,1)*(1+0.5*Math.max(0,k-0.6)); for(const [i,m] of moobs.entries()){ const s=i?1:-1; m.visible=mb>0.01; m.scale.set(0.08*(0.4+0.9*mb),0.07*(0.4+0.85*mb),0.05*(0.4+1.4*mb)); m.position.set(s*(0.085+0.08*k),0.37-0.03*mb,0.12+0.12*k); }
+    const mb=clamp((k-0.16)/0.46,0,1)*(1+0.65*Math.max(0,k-0.55));
+    for(const [i,m] of moobs.entries()){
+      const s=i?1:-1;
+      m.visible=mb>0.01;
+      m.scale.set(0.085*(0.42+1.02*mb),0.078*(0.40+1.00*mb),0.060*(0.40+1.65*mb));
+      m.position.set(s*(0.08+0.07*k),0.38-0.055*mb,0.135+0.16*k);
+    }
     const bl=clamp((k-0.35)/0.45,0,1); bellyLow.visible=bl>0.01; bellyLow.scale.set(0.2*(0.55+1.15*k),0.1*(0.4+0.9*bl),0.12*(0.55+1.75*k)); bellyLow.position.set(0,0.035-0.115*k,0.1+0.19*k);
     navel.visible=bl>0.3; navel.position.set(0,0.035-0.115*k+0.012,0.1+0.19*k+0.12*(0.55+1.75*k)-0.006); navel.rotation.x=-0.2;
     const ch=clamp((k-0.1)/0.7,0,1); chin.visible=ch>0.01; chin.scale.set(0.075*(0.45+0.55*ch),0.045*(0.35+0.6*ch),0.06*(0.45+0.6*ch)); chin.position.set(0,0.622-0.01*ch,0.04+0.025*ch);
     neck.scale.set(1+0.95*k,1-0.28*k1,1+0.95*k);
     for(const [leg,s] of [[legL,-1],[legR,1]]){ leg.position.x=s*(0.098+0.09*k); leg.userData.thigh.scale.set(1+1.1*k,1,0.94*(1+1.1*k)); leg.userData.shin.scale.set(1+0.55*k,1,0.94*(1+0.55*k)); }
     for(const [arm,s] of [[armL,-1],[armR,1]]){ arm.position.x=s*(0.185+0.14*k); arm.userData.upper.scale.set(1.24*(1+1.0*k),1,1.14*(1+1.0*k)); arm.userData.sleeve.scale.set(0.88*(1+0.95*k),1,0.92*(1+0.95*k)); arm.userData.fore.scale.set(1.22*(1+0.62*k),1,1.08*(1+0.62*k)); }
-    straps.scale.set(1+0.62*k,1,1+0.40*k); straps.position.z=0.12*k; pack.position.z=-0.148*(1+0.95*k); pack.position.y=0.02*k; };
+    straps.scale.set(1+0.72*k,1,1+0.22*k); straps.position.z=0.02+0.25*k; pack.position.z=-0.148*(1+0.95*k); pack.position.y=0.02*k; };
   GI.lie=()=>{ root.visible=true; workGear.visible=false; GI.bellyPose(1); root.rotation.set(-Math.PI/2,0,0); root.position.set(0,0.17,0.735); legL.rotation.set(0,0,0.04+0.08*GI.fat); legR.rotation.set(0,0,-0.04-0.08*GI.fat); kneeL.rotation.set(0,0,0); kneeR.rotation.set(0,0,0); armL.rotation.set(-0.08,0,-(0.24+0.3*Math.min(1.4,GI.fat))); armR.rotation.set(-0.08,0,0.24+0.3*Math.min(1.4,GI.fat)); elbowL.rotation.set(-0.10,0,0.04); elbowR.rotation.set(-0.10,0,-0.04); splay.scale.setScalar(1); splay.visible=true; GI.lying=true; GI.relaxHands(); };
   GI.stand=(x,z,yaw)=>{ GI.bellyPose(0); root.rotation.set(0,yaw,0); root.position.set(x,0.86,z); legL.rotation.set(0,0,0); legR.rotation.set(0,0,0); armL.rotation.set(0.03,0,-(GI.armOut())); armR.rotation.set(0.03,0,GI.armOut()); elbowL.rotation.set(-0.18,0,0.04); elbowR.rotation.set(-0.18,0,-0.04); splay.visible=false; GI.lying=false; GI.relaxHands(); };
   GI.walkPose=(ph,k)=>{ const f=Math.min(1.4,GI.fat), s=Math.sin(ph*0.55),lag=Math.sin(ph*0.55-0.48); const amp=0.30-0.1*Math.min(1,f); legL.rotation.x=s*amp*k; legR.rotation.x=-s*amp*k; legL.rotation.z=0.03*f; legR.rotation.z=-0.03*f; armL.rotation.x=0.03-lag*0.115*k; armR.rotation.x=0.03+lag*0.115*k; elbowL.rotation.x=-0.18+Math.sin(ph*0.55-0.9)*0.025*k; elbowR.rotation.x=-0.18-Math.sin(ph*0.55-0.9)*0.025*k; root.position.y=0.86+Math.abs(s)*(0.007+0.01*f)*k; root.rotation.z=s*0.045*f*k; belly.position.y=0.19-0.01*f-Math.abs(Math.sin(ph*0.55))*0.012*f*k; bellyLow.position.y=0.035-0.115*f-Math.abs(Math.sin(ph*0.55+0.5))*0.016*f*k; };
@@ -3443,13 +3502,15 @@ cleanBtn.addEventListener('pointerdown',ev=>{ ev.stopPropagation(); ev.preventDe
 
 /* ---------- phone loan ---------- */
 function phoneLit(){ return G.scene==='play'&&G.money<CFG.BROKE; }
-function takeLoan(){
-  G.money+=CFG.LOAN; G.debt+=CFG.LOAN_BACK; G.loanN++;
-  markHint('loan');
-  if(typeof loanBadge!=='undefined') loanBadge.style.display='none';
-  sms('은행',WEB+'입금 '+won(CFG.LOAN)+' 비상금대출\n상환 예정 '+won(CFG.LOAN_BACK));
-  const n=3+2*(G.loanN-1); for(let i=0;i<n;i++) G.extra.push({t:G.t+1.2+i*0.85,ent:'phone'});
-  SFX.cash(); floatMoney('+'+won(CFG.LOAN),'plus'); PHONEG.flash=1; hudDirty=true;
+function takeLoan(amount=CFG.LOAN){
+  if(!phoneLit()||!CFG.LOAN_OPTIONS.includes(amount)) return false;
+  const back=Math.round(amount*CFG.LOAN_RATE/1000)*1000, tier=Math.max(0,CFG.LOAN_OPTIONS.indexOf(amount));
+  G.money+=amount; G.debt+=back; G.loanN++;
+  markHint('loan'); setLoanOpen(false);
+  sms('은행',WEB+'입금 '+won(amount)+' 비상금대출\n상환 예정 '+won(back));
+  const n=3+2*tier+2*(G.loanN-1); for(let i=0;i<n;i++) G.extra.push({t:G.t+1.2+i*0.85,ent:'phone'});
+  SFX.cash(); floatMoney('+'+won(amount),'plus'); PHONEG.flash=1; hudDirty=true;
+  return true;
 }
 let phoneBuzzT=0;
 function updPhone(dt){
@@ -3480,7 +3541,7 @@ function missedWorkReason(){
   const reasons=[
     {score:0.05*messLevel(),text:'썩은 냄새에 밤새 잠을 설쳤다.'},
     {score:0.04*clamp(G.fat/1.4,0,1),text:'몸을 일으키지 못했다.'},
-    {score:0.05*clamp(G.stain/2.2,0,1),text:'울다 지쳐 알람을 못 들었다.'}
+    {score:0.05*clamp(G.stain/2.2,0,1),text:'눈을 떴을 땐 이미 근무 시작 시간이었다.'}
   ].sort((a,b)=>b.score-a.score);
   return reasons[0].score>0.008?reasons[0].text:'알람을 끄고 다시 눈을 감았다.';
 }
@@ -3712,6 +3773,7 @@ function setCutSkip(on){ const b=$('cutSkip'); if(!b) return; on=!!on; b.classLi
 function beginCryExit(c){
   c.exit=true; c.et=0; c.T=cutTimes(G.fat,G.fat); c.walkPh=rand(0,Math.PI/0.55); c.lastStep=Math.floor(c.walkPh*0.55/Math.PI); c.out=true; c.ink=0.5;
   jjiBubble.style.display='none'; tearBubble.style.display='none'; smsClear();
+  clearEnemies(); c.mini=null;
 }
 function updCryExit(c,dt){
   c.et+=dt; const t=c.et, T=c.T, k0=G.fat, lieP=new V3(0,0.17,0.735), standP=new V3(0,0.86,0.91);
@@ -3760,7 +3822,7 @@ function surfPointW(d){ return new V3(HEADW.c.x+d.x*HEADW.r.x*1.01,HEADW.c.y+d.y
 /* =========================================================
    UI
    ========================================================= */
-const barEl=$('bar'), hudMoney=$('hudMoney'), hudRound=$('hudRound'), labelsEl=$('labels'), toastEl=$('toast'), overlayEl=$('overlay');
+const barEl=$('bar'), hudMoney=$('hudMoney'), hudRound=$('hudRound'), hudRoundText=$('hudRoundText'), labelsEl=$('labels'), toastEl=$('toast'), overlayEl=$('overlay');
 const cutCaptionEl=$('cutCaption'); let cutCaptionT=0;
 function showCutCaption(text,sec){ if(!text) return; cutCaptionEl.textContent=text; cutCaptionEl.classList.add('on'); cutCaptionT=sec||2.4; }
 function hideCutCaption(){ cutCaptionT=0; if(cutCaptionEl) cutCaptionEl.classList.remove('on'); }
@@ -3770,21 +3832,33 @@ function buildBar(){ barEl.innerHTML=''; for(const f of FOODS){ const c=document
 function setThumbs(){ for(const f of FOODS){ try{ cards[f.id].querySelector('img').src=foodThumb(f.id); }catch(e){} } }
 function showBar(on){ barEl.classList.toggle('off',!on); }
 function updateBar(){ for(const f of FOODS){ const c=cards[f.id]; c.classList.toggle('no',G.money<f.price); c.classList.toggle('sel',selected===f.id); } }
-function updateHUD(){ hudMoney.childNodes[0].nodeValue=won(G.money); hudMoney.classList.toggle('broke',G.money<1500); const hd=$('hudDebt'); hd.textContent=G.debt>0?'빚 '+won(G.debt):''; hd.classList.toggle('on',G.debt>0); hudRound.textContent=(G.round+1)+'일'; updateBar(); hudDirty=false; }
+function updateHUD(){ hudMoney.childNodes[0].nodeValue=won(G.money); hudMoney.classList.toggle('broke',G.money<1500); const hd=$('hudDebt'); hd.textContent=G.debt>0?'빚 '+won(G.debt):''; hd.classList.toggle('on',G.debt>0); hudRoundText.textContent=(G.round+1)+'일'; updateBar(); hudDirty=false; }
 function floatMoney(txt,cls){ const s=document.createElement('span'); s.className='fl '+cls; s.textContent=txt; hudMoney.appendChild(s); setTimeout(()=>s.remove(),1300); }
 let toastT=0; function toast(msg,sec){ toastEl.textContent=msg; toastEl.classList.toggle('wrap',msg.length>24); toastEl.style.opacity=1; toastT=sec||4; }
 function hint(){}
 function setSelected(id){ selected=id; updateBar(); }
 function projectTo(x,y,z,out){ tmpV.set(x,y,z).project(camera); out.x=(tmpV.x*0.5+0.5)*window.innerWidth; out.y=(-tmpV.y*0.5+0.5)*window.innerHeight; out.z=tmpV.z; return out; }
 const scr={x:0,y:0,z:0};
-const loanBadge=document.createElement('div'); loanBadge.className='badge speech loanBadge'; loanBadge.textContent='휴대폰 눌러 3만 원 대출'; loanBadge.style.display='none'; labelsEl.appendChild(loanBadge);
+const loanWrap=$('loanWrap'), loanBtn=$('loanBtn'), loanChoices=$('loanChoices'); let loanOpen=false;
+function setLoanOpen(on){
+  loanOpen=!!on&&phoneLit()&&!gamePaused;
+  loanWrap.classList.toggle('open',loanOpen);
+  loanBtn.setAttribute('aria-expanded',String(loanOpen));
+  loanChoices.setAttribute('aria-hidden',String(!loanOpen));
+}
+function updateLoanUI(){
+  const show=phoneLit()&&!SELF_HIT.active&&!gamePaused;
+  if(!show){ loanWrap.classList.remove('on'); setLoanOpen(false); loanWrap.setAttribute('aria-hidden','true'); return; }
+  projectTo(PHONE.x,0.16,PHONE.z,scr);
+  if(scr.z<-1||scr.z>1){ loanWrap.classList.remove('on'); return; }
+  const half=loanOpen?97:52, bw=loanWrap.offsetWidth||88, bx=clamp(scr.x,half,window.innerWidth-half);
+  loanWrap.classList.add('on'); loanWrap.setAttribute('aria-hidden','false');
+  loanWrap.style.left=bx+'px'; loanWrap.style.top=(scr.y-10)+'px';
+  loanWrap.style.setProperty('--tail',clamp(scr.x-bx+bw/2,10,bw-10)+'px');
+}
+loanBtn.addEventListener('pointerdown',ev=>{ ev.stopPropagation(); ev.preventDefault(); if(gamePaused||!phoneLit()) return; audioInit(); SFX.click(); setLoanOpen(!loanOpen); });
+loanChoices.querySelectorAll('[data-loan]').forEach(btn=>btn.addEventListener('pointerdown',ev=>{ ev.stopPropagation(); ev.preventDefault(); if(gamePaused) return; takeLoan(Number(btn.dataset.loan)); }));
 function updateBadges(){
-  const showLoan=phoneLit()&&!seenHints.loan;
-  if(showLoan){
-    projectTo(PHONE.x,0.16,PHONE.z,scr);
-    const bw=loanBadge.offsetWidth||154, bx=clamp(scr.x,12+bw/2,window.innerWidth-12-bw/2);
-    loanBadge.style.display='block'; loanBadge.style.left=bx+'px'; loanBadge.style.top=(scr.y-10)+'px'; loanBadge.style.setProperty('--tail',clamp(scr.x-bx+bw/2,8,bw-8)+'px');
-  } else loanBadge.style.display='none';
   for(const t of towers){
     if(!t.badge){ t.badge=document.createElement('div'); t.badge.className='badge ammoBadge'; labelsEl.appendChild(t.badge); }
     const b=t.badge;
@@ -4138,12 +4212,13 @@ app.addEventListener('pointerdown',ev=>{
   if(G.scene!=='play') return;
   if(drag) return;
   if(ev.target.closest('.badge')) return;
-  if(!ev.target.closest('.card')&&phonePressed(ev)){ hideGhost(); setSelected(null); takeLoan(); return; }
+  if(loanOpen) setLoanOpen(false);
+  if(!ev.target.closest('.card')&&phonePressed(ev)){ hideGhost(); setSelected(null); setLoanOpen(true); return; }
   const card=ev.target.closest('.card'); if(card){ drag={id:card.dataset.id,px:ev.clientX,py:ev.clientY,moved:false,fromSel:false,pointerId:ev.pointerId}; try{ app.setPointerCapture(ev.pointerId); }catch(e){} return; }
   if(selected){ const pt=floorPoint(ev); if(pt){ drag={id:selected,px:ev.clientX,py:ev.clientY,moved:true,fromSel:true,pointerId:ev.pointerId}; moveGhost(pt,selected); try{ app.setPointerCapture(ev.pointerId); }catch(e){} } return; }
 });
 app.addEventListener('pointermove',ev=>{ if(!drag||ev.pointerId!==drag.pointerId) return; if(!drag.moved&&Math.hypot(ev.clientX-drag.px,ev.clientY-drag.py)>10) drag.moved=true; if(drag.moved){ const pt=floorPoint(ev); if(pt) moveGhost(pt,drag.id); else if(ghost){ ghost.visible=false; ghostTip.style.display='none'; } } });
-function endDrag(ev){ if(!drag||ev.pointerId!==drag.pointerId) return; if(drag.moved&&phonePressed(ev)){ hideGhost(); try{ app.releasePointerCapture(ev.pointerId); }catch(e){} drag=null; setSelected(null); takeLoan(); return; } if(drag.moved){ const pt=floorPoint(ev); if(pt) tryPlace(drag.id,pt); hideGhost(); setSelected(drag.id); } else { setSelected(drag.id); SFX.click(); } try{ app.releasePointerCapture(ev.pointerId); }catch(e){} drag=null; }
+function endDrag(ev){ if(!drag||ev.pointerId!==drag.pointerId) return; if(drag.moved&&phonePressed(ev)){ hideGhost(); try{ app.releasePointerCapture(ev.pointerId); }catch(e){} drag=null; setSelected(null); setLoanOpen(true); return; } if(drag.moved){ const pt=floorPoint(ev); if(pt) tryPlace(drag.id,pt); hideGhost(); setSelected(drag.id); } else { setSelected(drag.id); SFX.click(); } try{ app.releasePointerCapture(ev.pointerId); }catch(e){} drag=null; }
 app.addEventListener('pointerup',endDrag); app.addEventListener('pointercancel',ev=>{ if(!drag||ev.pointerId!==drag.pointerId) return; hideGhost(); drag=null; });
 window.addEventListener('keydown',ev=>{ if(G.scene!=='play') return; if(!ev.repeat&&(ev.code==='Space'||ev.code==='KeyQ')){ ev.preventDefault(); startSelfHit(); return; } if(SELF_HIT.active) return; const k=parseInt(ev.key,10); if(k>=1&&k<=7) setSelected(FOODS[k-1].id); if(ev.key==='Escape') setSelected(null); });
 
@@ -4195,11 +4270,11 @@ function render(now,dt=1/60){
   if(GI.pant>0){ GI.pant=Math.max(0,GI.pant-dt*0.3); const b=Math.sin(G.time*8.8)*0.045*GI.pant; GI.belly.scale.y=(0.75+0.5*GI.fat)*(1+b); GI.torso.scale.z=(0.78+0.8*GI.fat)*(1+b*0.7); if(GI.pant===0){ GI.belly.scale.y=0.75+0.5*GI.fat; GI.torso.scale.z=0.78+0.8*GI.fat; } }
   eyeTick++; if(eyeTick%2===0||G.scene==='cry'||SELF_HIT.active){ const sf=GI.selfHitFace; const st={tear:G.scene==='cry'||G.scene==='over'?1:Math.max(G.tear,sf.tear||0),blink:0,flinch:sf.flinch||0,squeeze:sf.squeeze||0,red:sf.red||0,flush:sf.flush||0,fat:Math.min(1,G.fat),dark:Math.min(1,G.stain/2.2),t:G.time,wob:Math.max(G.gnawPulse,(G.scene==='cry'||G.tear>0.85)?1:0,SELF_HIT.active?0.45:0),rage:sf.rage||0,impact:sf.impact,hitSide:sf.side,woe:sf.woe||0,wide:sf.wide||0}; for(const E of GI.eyes) drawEye(E,st); }
   if(floorDirty){ floorDirtyT+=dt; if(floorDirtyT>0.2){ floorTex.needsUpdate=true; floorDirty=false; floorDirtyT=0; } }
-  if(hudDirty) updateHUD(); updateBadges(); updateBubbles(dt);
+  if(hudDirty) updateHUD(); updateBadges(); updateLoanUI(); updatePauseButton(); updateBubbles(dt);
   GI.headG.updateWorldMatrix(true,false); FACEMARK.u.uHeadInv.value.copy(GI.headG.matrixWorld).invert(); FACEMARK.u.uFlush.value=GI.selfHitFace.flush||0;
   renderer.render(scene,camera);
 }
-function frame(now){ if(renderLost) return; const dt=Math.min(0.05,(now-last)/1000); last=now; step(dt); render(now,dt); requestAnimationFrame(frame); }
+function frame(now){ if(renderLost) return; const dt=Math.min(0.05,(now-last)/1000); last=now; if(!gamePaused) step(dt); render(now,gamePaused?0:dt); requestAnimationFrame(frame); }
 function mergeStatic(roots,into){
   const isDyn=o=>{ for(let a=o;a;a=a.parent) if(a.userData&&a.userData.dyn) return true; return false; };
   const buckets=new Map(), gone=[];

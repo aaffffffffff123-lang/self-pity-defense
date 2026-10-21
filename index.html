@@ -85,10 +85,14 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 #loanBtn:active{transform:scale(.96)}
 #loanWrap.open #loanBtn{background:#1748B5;color:#fff;box-shadow:0 0 0 3px rgba(47,107,255,.24)}
 #loanWrap.open #loanBtn .ln2{color:#DCE7FF}
-#loanChoices{position:absolute;left:50%;bottom:calc(100% + 9px);width:178px;transform:translateX(-50%);display:none;grid-template-columns:repeat(2,1fr);gap:6px;padding:8px;border-radius:14px;background:rgba(255,255,255,.98);box-shadow:0 4px 16px rgba(36,32,30,.2)}
+#loanChoices{position:absolute;left:50%;bottom:calc(100% + 9px);width:196px;transform:translateX(-50%);display:none;grid-template-columns:repeat(2,1fr);gap:6px;padding:8px;border-radius:14px;background:rgba(255,255,255,.98);box-shadow:0 4px 16px rgba(36,32,30,.2)}
 #loanWrap.open #loanChoices{display:grid}
+#loanTerms{grid-column:1/-1;display:flex;flex-direction:column;gap:2px;padding:2px 3px 5px;text-align:center;color:#4E5665;font:800 11px/1.25 'Noto Sans KR',sans-serif}
+#loanTerms b{color:#1748B5;font-size:13px}
+#loanTerms small{font-size:10px;font-weight:700;color:#6B7280}
 #loanChoices button{min-height:40px;border:1px solid rgba(47,107,255,.22);border-radius:10px;background:#EEF3FF;color:#1748B5;font:900 14px/1 'Noto Sans KR',sans-serif;cursor:pointer;touch-action:manipulation}
 #loanChoices button:active{transform:scale(.95);background:#DCE7FF}
+#loanChoices button:disabled{opacity:.34;filter:grayscale(.45);cursor:not-allowed;transform:none;background:#E7E9EE;color:#777}
 .box{pointer-events:auto;background:rgba(255,255,255,.97);border-radius:24px;padding:26px 30px 24px;text-align:center;box-shadow:0 6px 0 rgba(90,60,0,.16);min-width:min(82vw,340px)}
 .box h1{margin:0 0 4px;font-size:38px;font-weight:900;letter-spacing:-1.5px;line-height:1.08}
 .box h1 span{color:var(--red)}
@@ -203,7 +207,7 @@ body.gamePaused #app *,body.gamePaused #app *::before,body.gamePaused #app *::af
 <div id="overlay"></div>
 <button id="cutSkip" type="button" aria-label="출근 장면 건너뛰기" aria-hidden="true" disabled>출근 건너뛰기 ›</button>
 <button id="cleanBtn" type="button" aria-label="집청소 부르기"><span class="cl1">집청소</span><span class="cl2"></span></button>
-<div id="loanWrap" aria-hidden="true"><button id="loanBtn" type="button" aria-label="대출 금액 선택" aria-expanded="false"><span class="ln1">대출</span><span class="ln2">금액 선택</span></button><div id="loanChoices" role="menu" aria-label="대출 금액"><button type="button" role="menuitem" data-loan="30000">3만 원</button><button type="button" role="menuitem" data-loan="100000">10만 원</button><button type="button" role="menuitem" data-loan="300000">30만 원</button><button type="button" role="menuitem" data-loan="1000000">100만 원</button></div></div>
+<div id="loanWrap" aria-hidden="true"><button id="loanBtn" type="button" aria-label="대출 금액 선택" aria-expanded="false"><span class="ln1">대출</span><span class="ln2">잔여 300만 원</span></button><div id="loanChoices" role="menu" aria-label="대출 금액"><div id="loanTerms"><b id="loanRemaining">잔여 한도 3,000,000원</b><small>연 15% · 10일마다 이자 정산</small></div><button type="button" role="menuitem" data-loan="30000">3만 원</button><button type="button" role="menuitem" data-loan="100000">10만 원</button><button type="button" role="menuitem" data-loan="300000">30만 원</button><button type="button" role="menuitem" data-loan="1000000">100만 원</button></div></div>
 <div id="ultScr"></div>
 <div id="ultWrap" aria-hidden="true"><canvas id="ultFx"></canvas><button id="selfHitBtn" type="button" aria-label="궁극기 게이지 0퍼센트" disabled><svg viewBox="0 0 100 100" aria-hidden="true">
 <defs>
@@ -277,7 +281,7 @@ import * as THREE from 'three';
    CONFIG
    ========================================================= */
 const CFG = {
-  START_MONEY: 20000, LOAN: 30000, LOAN_OPTIONS: [30000,100000,300000,1000000], LOAN_RATE: 1.3, BROKE: 3000, WEIGHT_GAIN_MULT: 0.28,
+  START_MONEY: 20000, LOAN_OPTIONS: [30000,100000,300000,1000000], LOAN_LIMIT: 3000000, LOAN_APR: 0.15, BROKE: 3000, WEIGHT_GAIN_MULT: 0.28,
   // A night shift at the 2026 minimum wage (10,320/h): 00:00-09:00 with an hour's break, six of the eight hours
   // before 06:00 at +50%. An hour late costs an hour of night pay. Five shifts make a week (all five worked: the
   // weekly allowance, one day's base pay); ten make a month here, so the bills come round within a run: the phone
@@ -3045,7 +3049,7 @@ selfHitBtn.addEventListener('pointerdown',ev=>{ ev.preventDefault(); ev.stopProp
 /* =========================================================
    GAME STATE
    ========================================================= */
-const G={ scene:'title', round:0, money:CFG.START_MONEY, kills:0, fat:0, eaten:0, tear:0, invaders:0, gnawPulse:0, t:0, spawns:[], spawnIdx:0, cues:[], cueIdx:0, extra:[], kickAt:0, plan:null, stallT:0, snap:null, time:0, gone:0, party:false, tearCarry:0, stain:0, debt:0, loanN:0, weekMiss:0, monthMiss:0, monthFood:0, monthBuys:0, monthTaxi:0, monthTaxiN:0, monthClean:0, rentOwed:0, billOwed:0, evictDue:-1, evicted:false, saveN:0, saveMiss:0, lastStay:false, lastMode:'', adDay:-1, remindDay:-1,
+const G={ scene:'title', round:0, money:CFG.START_MONEY, kills:0, fat:0, eaten:0, tear:0, invaders:0, gnawPulse:0, t:0, spawns:[], spawnIdx:0, cues:[], cueIdx:0, extra:[], kickAt:0, plan:null, stallT:0, snap:null, time:0, gone:0, party:false, tearCarry:0, stain:0, debt:0, loanBalance:0, weekMiss:0, monthMiss:0, monthFood:0, monthBuys:0, monthTaxi:0, monthTaxiN:0, monthClean:0, rentOwed:0, billOwed:0, evictDue:-1, evicted:false, saveN:0, saveMiss:0, lastStay:false, lastMode:'', adDay:-1, remindDay:-1,
   trashV:0, cleanBooked:0, propsGone:false, trashAdSent:false, trashWarnSent:false };
 let hudDirty=true, CUT=null, CRY=null;
 /* ---------- entrances ---------- */
@@ -3186,7 +3190,7 @@ function snapshot(){
   const old=G.snap;
   G.snap={
     money:G.money,kills:G.kills,fat:G.fat,eaten:G.eaten,round:G.round,
-    tear:G.tear,stain:G.stain,debt:G.debt,ultimateCharge:SELF_HIT.charge,
+    tear:G.tear,stain:G.stain,debt:G.debt,loanBalance:G.loanBalance,ultimateCharge:SELF_HIT.charge,
     weekMiss:G.weekMiss,monthMiss:G.monthMiss,monthFood:G.monthFood,monthBuys:G.monthBuys,monthTaxi:G.monthTaxi,monthTaxiN:G.monthTaxiN,monthClean:G.monthClean,rentOwed:G.rentOwed,billOwed:G.billOwed,evictDue:G.evictDue,saveN:G.saveN,saveMiss:G.saveMiss,lastStay:G.lastStay,
     trashV:G.trashV,cleanBooked:G.cleanBooked,propsGone:G.propsGone,
     towers:towers.map(t=>({
@@ -3205,7 +3209,7 @@ function snapshot(){
 function startRound(r){
   G.round=r; const b=buildSpawns(r); addTrashSpawns(b); G.spawns=b.list; G.cues=b.cues; G.cueIdx=0; G.extra=[]; G.kickAt=0; G.plan=b.plan; G.spawnIdx=0; G.t=0;
   G.party=(r+1===CFG.PARTY_DAY); setEntrancesForDay(r+1);
-  G.eaten=0; G.tear=G.tearCarry||0; G.invaders=0; G.gnawPulse=0; G.stallT=0; G.scene='play'; G.loanN=0; setStain(G.stain);
+  G.eaten=0; G.tear=G.tearCarry||0; G.invaders=0; G.gnawPulse=0; G.stallT=0; G.scene='play'; setStain(G.stain);
   doorRattle=0; SFX.setMurmur(0); clearEnemies(); resetLineBags(); resetSelfHitForRound(); snapshot(); hudDirty=true; showBar(true);
   if(G.round%CFG.MONTH===(CFG.RENT_DAY+CFG.MONTH-3)%CFG.MONTH&&G.remindDay!==G.round){ G.remindDay=G.round; sms('은행',WEB+'3일 뒤 월세 '+won(CFG.RENT)+' 자동이체 예정입니다.'); }
   const tf=trashFill();
@@ -3214,7 +3218,7 @@ function startRound(r){
 }
 function fatAfterRound(fat,eaten){ return Math.min(1.4,fat+eaten); }
 function newRun(){
-  resetCommuteVisual(); G.party=false; G.tearCarry=0; G.stain=0; G.debt=0; G.loanN=0; setEntrancesForDay(1); clearLumps();
+  resetCommuteVisual(); G.party=false; G.tearCarry=0; G.stain=0; G.debt=0; G.loanBalance=0; setEntrancesForDay(1); clearLumps();
   G.weekMiss=0; G.monthMiss=0; G.monthFood=0; G.monthBuys=0; G.monthTaxi=0; G.monthTaxiN=0; G.monthClean=0; G.rentOwed=0; G.billOwed=0; G.evictDue=-1; G.evicted=false; G.saveN=0; G.saveMiss=0; G.lastStay=false;
   G.trashV=0; G.cleanBooked=0; G.propsGone=false; G.trashAdSent=false; G.trashWarnSent=false; emptyRoom(false); setPropsVisible(true); G.lastMode=''; G.adDay=-1; G.remindDay=-1; smsClear();
   G.money=CFG.START_MONEY; G.kills=0; G.fat=0; G.eaten=0; G.round=0; G.tear=0; G.invaders=0; G.gnawPulse=0;
@@ -3234,6 +3238,7 @@ function restoreSnap(){
   G.tearCarry=s.tear;
   G.stain=s.stain;
   G.debt=s.debt;
+  G.loanBalance=s.loanBalance||0;
   G.weekMiss=s.weekMiss||0; G.monthMiss=s.monthMiss||0; G.monthFood=s.monthFood||0; G.monthBuys=s.monthBuys||0; G.monthTaxi=s.monthTaxi||0; G.monthTaxiN=s.monthTaxiN||0; G.monthClean=s.monthClean||0; G.rentOwed=s.rentOwed||0; G.billOwed=s.billOwed||0; G.evictDue=s.evictDue===undefined?-1:s.evictDue; G.evicted=false;
   G.trashV=s.trashV||0; G.cleanBooked=s.cleanBooked||0; G.propsGone=!!s.propsGone; emptyRoom(false); setPropsVisible(!G.propsGone); G.saveN=s.saveN||0; G.saveMiss=s.saveMiss||0; G.lastStay=!!s.lastStay;
   smsClear();
@@ -3502,31 +3507,34 @@ cleanBtn.addEventListener('pointerdown',ev=>{ ev.stopPropagation(); ev.preventDe
 
 /* ---------- phone loan ---------- */
 function phoneLit(){ return G.scene==='play'&&G.money<CFG.BROKE; }
-function takeLoan(amount=CFG.LOAN){
+function loanAvailable(){ return Math.max(0,CFG.LOAN_LIMIT-G.loanBalance); }
+function loanEnemyCount(){ return Math.min(18,3+Math.floor(G.loanBalance/200000)); }
+function takeLoan(amount){
   if(!phoneLit()||!CFG.LOAN_OPTIONS.includes(amount)) return false;
-  const back=Math.round(amount*CFG.LOAN_RATE/1000)*1000, tier=Math.max(0,CFG.LOAN_OPTIONS.indexOf(amount));
-  G.money+=amount; G.debt+=back; G.loanN++;
+  if(amount>loanAvailable()){ SFX.denied(); toast('대출 한도가 부족합니다.',2); return false; }
+  G.money+=amount; G.loanBalance+=amount; G.debt+=amount;
   markHint('loan'); setLoanOpen(false);
-  sms('은행',WEB+'입금 '+won(amount)+' 비상금대출\n상환 예정 '+won(back));
-  const n=3+2*tier+2*(G.loanN-1); for(let i=0;i<n;i++) G.extra.push({t:G.t+1.2+i*0.85,ent:'phone'});
+  sms('은행',WEB+'입금 '+won(amount)+' 비상금대출\n대출 잔액 '+won(G.loanBalance)+' · 연 '+Math.round(CFG.LOAN_APR*100)+'%');
+  const n=loanEnemyCount(); for(let i=0;i<n;i++) G.extra.push({t:G.t+1.2+i*0.85,ent:'phone'});
   SFX.cash(); floatMoney('+'+won(amount),'plus'); PHONEG.flash=1; hudDirty=true;
   return true;
 }
 let phoneBuzzT=0;
 function updPhone(dt){
-  const lit=phoneLit(), pending=G.scene==='play'&&G.extra.some(x=>x.ent==='phone');
+  const lit=phoneLit(), canBorrow=loanAvailable()>=CFG.LOAN_OPTIONS[0], pending=G.scene==='play'&&G.extra.some(x=>x.ent==='phone');
   if(PHONEG.flash>0) PHONEG.flash-=dt*1.6;
   let col=0x2B3440, li=0;
-  if(lit&&G.adDay!==G.round){ G.adDay=G.round; sms('광고','(광고) 직장인 비상금 대출\n한도 조회 3분, 바로 입금'); }
-  if(lit){ const p=(Math.sin(G.time*6)+1)/2; col=p>0.5?0xFFFFFF:0xCFE6FF; li=0.55+p*0.35; phoneBuzzT-=dt; if(phoneBuzzT<=0){ phoneBuzzT=1.7; SFX.phoneBuzz(); } }
+  if(lit&&canBorrow&&G.adDay!==G.round){ G.adDay=G.round; sms('광고','(광고) 직장인 비상금 대출\n한도 조회 3분, 바로 입금'); }
+  if(lit&&canBorrow){ const p=(Math.sin(G.time*6)+1)/2; col=p>0.5?0xFFFFFF:0xCFE6FF; li=0.55+p*0.35; phoneBuzzT-=dt; if(phoneBuzzT<=0){ phoneBuzzT=1.7; SFX.phoneBuzz(); } }
   else phoneBuzzT=0.3;
+  if(lit&&!canBorrow){ col=0x6B3038; li=0.25; }
   if(pending){ const p=(Math.sin(G.time*9)+1)/2; col=p>0.5?0xB388FF:0x7C4DFF; li=0.7; }
   // the alarm he sleeps through: the phone lights and rattles by the bed
   const alarm=G.scene==='cut'&&CUT&&CUT.alarm, ring=alarm&&(G.time%0.62)<0.4;
   if(alarm){ col=ring?0xFFFFFF:0xCFE6FF; li=ring?1.0:0.5; }
   if(PHONEG.flash>0){ col=0xFFF6C8; li=1.2; }
   PHONEG.scr.material.color.setHex(col); PHONEG.light.intensity=li;
-  const buzz=(lit&&phoneBuzzT>1.3)||ring; PHONEG.g.rotation.y=-0.42+(buzz?Math.sin(G.time*70)*0.06:0); PHONEG.g.position.x=PHONE.x+(buzz?Math.sin(G.time*83)*0.004:0);
+  const buzz=(lit&&canBorrow&&phoneBuzzT>1.3)||ring; PHONEG.g.rotation.y=-0.42+(buzz?Math.sin(G.time*70)*0.06:0); PHONEG.g.position.x=PHONE.x+(buzz?Math.sin(G.time*83)*0.004:0);
 }
 /* ---------- cutscene (출근) ---------- */
 // What the night will be: out to work, overslept and into a taxi, or never out of bed. It mostly comes from the state
@@ -3567,12 +3575,19 @@ function payBill(amt,label,kind){ const paid=Math.min(G.money,amt), owed=amt-pai
   else sms('은행',WEB+label+' '+won(amt)+'\n잔액 부족으로 출금되지 않았습니다.');
   if(owed){ G.debt+=owed; if(kind==='rent') G.rentOwed+=owed; else G.billOwed+=owed; }
   return {paid,owed}; }
+function accrueLoanInterest(){
+  if(G.loanBalance<=0) return 0;
+  const interest=Math.max(1,Math.round(G.loanBalance*(CFG.LOAN_APR/12)));
+  G.loanBalance+=interest; G.debt+=interest;
+  sms('은행',WEB+'비상금대출 이자 '+won(interest)+'\n대출 잔액 '+won(G.loanBalance)+' · 연 '+Math.round(CFG.LOAN_APR*100)+'%');
+  return interest;
+}
 function collectOwed(){ let back=Math.min(G.debt,G.money); if(back<=0) return 0; const total=back;
   const take=(amt,label)=>{ if(amt<=0) return; G.debt-=amt; G.money-=amt; back-=amt; sms('은행',WEB+'출금 '+won(amt)+' '+label+'\n잔액 '+won(G.money)); };
   const r=Math.min(G.rentOwed,back); G.rentOwed-=r; take(r,'월세 미납분'); if(r>0&&G.rentOwed<=0) G.evictDue=-1;
   const b=Math.min(G.billOwed,back); G.billOwed-=b; take(b,'미납 요금');
-  take(back,'대출 상환');
-  return total; }
+  const l=Math.min(G.loanBalance,back); G.loanBalance-=l; take(l,'대출 상환');
+  return total-back; }
 function settleMorning(showFx=true){
   const c=CUT; if(!c||c.paid) return; c.paid=true;
   const n=G.round, md=n%CFG.MONTH, worked=c.mode!=='stay', docked=c.mode==='late'&&!c.taxi;
@@ -3583,6 +3598,7 @@ function settleMorning(showFx=true){
   if(docked) sms('근무 알림',WEB+'출근 '+c.clockIn+' 지각 처리되었습니다.');
   const income=pay+weekly;
   if(income){ G.money+=income; sms('은행',WEB+'입금 '+won(income)+(weekly?(pay?' 급여·주휴수당':' 주휴수당'):'')+'\n잔액 '+won(G.money)); }
+  if(md===CFG.RENT_DAY&&n>0) accrueLoanInterest();
   let out=collectOwed();
   if(showFx&&income>0){ SFX.coin(); if(weekly) SFX.bonus(); floatMoney('+'+won(income),'plus'); }
   // rent still owed from the last rent day: one more morning, then out
@@ -3839,7 +3855,7 @@ function hint(){}
 function setSelected(id){ selected=id; updateBar(); }
 function projectTo(x,y,z,out){ tmpV.set(x,y,z).project(camera); out.x=(tmpV.x*0.5+0.5)*window.innerWidth; out.y=(-tmpV.y*0.5+0.5)*window.innerHeight; out.z=tmpV.z; return out; }
 const scr={x:0,y:0,z:0};
-const loanWrap=$('loanWrap'), loanBtn=$('loanBtn'), loanChoices=$('loanChoices'); let loanOpen=false;
+const loanWrap=$('loanWrap'), loanBtn=$('loanBtn'), loanChoices=$('loanChoices'), loanRemaining=$('loanRemaining'); let loanOpen=false;
 function setLoanOpen(on){
   loanOpen=!!on&&phoneLit()&&!gamePaused;
   loanWrap.classList.toggle('open',loanOpen);
@@ -3847,17 +3863,25 @@ function setLoanOpen(on){
   loanChoices.setAttribute('aria-hidden',String(!loanOpen));
 }
 function updateLoanUI(){
-  const show=phoneLit()&&!SELF_HIT.active&&!gamePaused;
+  const show=phoneLit()&&!SELF_HIT.active&&!gamePaused, available=loanAvailable();
+  const short=available>=10000?Math.floor(available/10000)+'만 원':won(available);
+  loanBtn.querySelector('.ln2').textContent=available>0?'잔여 '+short:'한도 소진';
+  loanBtn.setAttribute('aria-label',available>0?'대출 금액 선택, 잔여 한도 '+won(available):'대출 한도 소진');
+  loanRemaining.textContent='잔여 한도 '+won(available);
+  loanChoices.querySelectorAll('[data-loan]').forEach(btn=>{
+    const disabled=Number(btn.dataset.loan)>available;
+    btn.disabled=disabled; btn.setAttribute('aria-disabled',String(disabled));
+  });
   if(!show){ loanWrap.classList.remove('on'); setLoanOpen(false); loanWrap.setAttribute('aria-hidden','true'); return; }
   projectTo(PHONE.x,0.16,PHONE.z,scr);
   if(scr.z<-1||scr.z>1){ loanWrap.classList.remove('on'); return; }
-  const half=loanOpen?97:52, bw=loanWrap.offsetWidth||88, bx=clamp(scr.x,half,window.innerWidth-half);
+  const half=loanOpen?106:60, bw=loanWrap.offsetWidth||96, bx=clamp(scr.x,half,window.innerWidth-half);
   loanWrap.classList.add('on'); loanWrap.setAttribute('aria-hidden','false');
   loanWrap.style.left=bx+'px'; loanWrap.style.top=(scr.y-10)+'px';
   loanWrap.style.setProperty('--tail',clamp(scr.x-bx+bw/2,10,bw-10)+'px');
 }
 loanBtn.addEventListener('pointerdown',ev=>{ ev.stopPropagation(); ev.preventDefault(); if(gamePaused||!phoneLit()) return; audioInit(); SFX.click(); setLoanOpen(!loanOpen); });
-loanChoices.querySelectorAll('[data-loan]').forEach(btn=>btn.addEventListener('pointerdown',ev=>{ ev.stopPropagation(); ev.preventDefault(); if(gamePaused) return; takeLoan(Number(btn.dataset.loan)); }));
+loanChoices.querySelectorAll('[data-loan]').forEach(btn=>btn.addEventListener('pointerdown',ev=>{ ev.stopPropagation(); ev.preventDefault(); if(gamePaused||btn.disabled) return; takeLoan(Number(btn.dataset.loan)); }));
 function updateBadges(){
   for(const t of towers){
     if(!t.badge){ t.badge=document.createElement('div'); t.badge.className='badge ammoBadge'; labelsEl.appendChild(t.badge); }

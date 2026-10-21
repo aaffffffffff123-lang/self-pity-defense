@@ -54,19 +54,19 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 .badge{position:absolute;transform:translate(-50%,-100%);background:rgba(255,255,255,.94);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;white-space:nowrap;box-shadow:0 1px 0 rgba(90,60,0,.15);pointer-events:none}
 .ammoBadge{font-size:10px;opacity:.55;padding:1px 6px;transition:opacity .15s,color .15s,background .15s}
 .ammoBadge.low{opacity:1;color:var(--red);background:#FFF1E8;box-shadow:0 2px 0 rgba(226,55,68,.18)}
-#toast{position:absolute;left:50%;top:calc(var(--sat) + 84px);transform:translateX(-50%);background:rgba(255,255,255,.96);color:var(--ink);padding:9px 16px;border-radius:14px;font-size:13px;font-weight:700;white-space:nowrap;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:0 2px 0 rgba(90,60,0,.14)}
+#toast{position:absolute;left:50%;top:calc(var(--sat) + 66px);transform:translateX(-50%);background:rgba(255,255,255,.96);color:var(--ink);padding:9px 16px;border-radius:14px;font-size:13px;font-weight:700;white-space:nowrap;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:0 2px 0 rgba(90,60,0,.14)}
 #cutCaption{position:absolute;left:50%;bottom:calc(var(--sab) + 78px);z-index:17;max-width:min(calc(100vw - 32px),420px);transform:translate(-50%,10px);padding:8px 14px;border-radius:9px;background:rgba(20,18,17,.82);color:#fff;font-size:14px;font-weight:700;line-height:1.4;text-align:center;white-space:nowrap;opacity:0;transition:opacity .22s,transform .22s;pointer-events:none;text-shadow:0 1px 1px #000}
 #cutCaption.on{opacity:1;transform:translate(-50%,0)}
 #overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
 /* a text arriving on the phone: the usual notification card, under the top bar */
-#sms{position:absolute;left:50%;top:calc(var(--sat) + 84px);width:min(calc(100vw - 24px),360px);transform:translate(-50%,-12px);opacity:0;pointer-events:none;background:rgba(255,255,255,.97);border-radius:16px;padding:9px 13px 10px;box-shadow:0 8px 22px rgba(36,32,30,.16),0 1px 0 rgba(36,32,30,.08);transition:opacity .25s,transform .25s;z-index:18;text-align:left}
+#sms{position:absolute;left:50%;top:calc(var(--sat) + 60px);width:min(calc(100vw - 24px),360px);transform:translate(-50%,-12px);opacity:0;pointer-events:none;background:rgba(255,255,255,.97);border-radius:16px;padding:9px 13px 10px;box-shadow:0 8px 22px rgba(36,32,30,.16),0 1px 0 rgba(36,32,30,.08);transition:opacity .25s,transform .25s;z-index:18;text-align:left}
 #sms.on{opacity:1;transform:translate(-50%,0)}
 #sms .smsHead{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:rgba(36,32,30,.5);margin-bottom:3px}
 #sms .smsHead::before{content:"";width:15px;height:15px;border-radius:4px;background:#34C759;flex:none}
 #sms .smsFrom{color:var(--ink);font-weight:800}
 #sms .smsTime{margin-left:auto;font-weight:500}
 #sms .smsBody{font-size:13px;font-weight:600;line-height:1.45;white-space:pre-line;color:var(--ink);word-break:keep-all}
-#sms.on ~ #toast{top:calc(var(--sat) + 174px)}
+#sms.on ~ #toast{top:calc(var(--sat) + 150px)}
 #toast.wrap{white-space:normal;width:min(calc(100vw - 32px),360px);text-align:center;line-height:1.45}
 #firstPlaceHint{position:absolute;left:50%;bottom:calc(var(--sab) + clamp(105px,17vh,142px));z-index:18;transform:translate(-50%,8px);padding:8px 14px 9px;border-radius:13px;background:rgba(36,32,30,.94);color:#fff;font-size:13px;font-weight:800;line-height:1.3;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;box-shadow:0 3px 0 rgba(0,0,0,.18)}
 #firstPlaceHint::after{content:"↓";position:absolute;left:50%;top:100%;transform:translateX(-50%);color:#E23744;font-size:28px;line-height:1;animation:firstPlaceBob .75s ease-in-out infinite alternate}
@@ -155,8 +155,10 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 .hide{display:none!important}
  
 #dayFade{position:absolute;inset:0;background:#13151e;opacity:0;pointer-events:none}
-#hudRound{position:relative;font-size:17px;padding:5px 6px 5px 12px;display:flex;align-items:center;gap:7px;pointer-events:auto}
-#tearMeter{position:absolute;left:0;top:calc(100% + 5px);width:clamp(94px,27vw,112px);padding:3px 6px 5px;border-radius:9px;background:rgba(255,255,255,.93);box-shadow:0 2px 0 rgba(90,60,0,.12);font-size:10px;line-height:1;color:var(--ink);pointer-events:none;transition:transform .18s,background .18s}
+#hudRound{font-size:17px;padding:5px 6px 5px 12px;display:flex;align-items:center;gap:7px;pointer-events:auto}
+#tearMeter{--tail:50%;position:absolute;left:50%;top:65%;width:clamp(96px,27vw,112px);padding:3px 6px 5px;border:1px solid rgba(36,32,30,.12);border-radius:9px;background:rgba(255,255,255,.94);box-shadow:0 2px 0 rgba(90,60,0,.12);font-size:10px;line-height:1;color:var(--ink);pointer-events:none;opacity:0;transform:translate(-50%,-100%) scale(.94);transform-origin:50% 100%;transition:opacity .15s,transform .15s,background .18s}
+#tearMeter::after{content:"";position:absolute;left:var(--tail);top:100%;margin-left:-5px;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid rgba(255,255,255,.94)}
+#tearMeter.on{opacity:1;transform:translate(-50%,-100%) scale(1)}
 #tearMeter .tearRead{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;font-weight:900}
 #tearValue{font-variant-numeric:tabular-nums;opacity:.68}
 .tearTrack{display:block;height:5px;overflow:hidden;border-radius:99px;background:rgba(36,32,30,.13)}
@@ -164,11 +166,12 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 #tearMeter.warn #tearFill{background:#E7A51B}
 #tearMeter.danger #tearFill{background:#E9633F}
 #tearMeter.critical{background:#FFF0EE;animation:tearMeterBeat .58s ease-in-out infinite}
+#tearMeter.critical::after{border-top-color:#FFF0EE}
 #tearMeter.critical #tearFill{background:var(--red)}
 #tearGain{position:absolute;right:-3px;top:-10px;opacity:0;color:var(--red);font-size:12px;font-weight:900;text-shadow:0 1px 0 #fff,1px 0 0 #fff,-1px 0 0 #fff;white-space:nowrap}
 #tearGain.on{animation:tearGain 1s ease-out forwards}
 @keyframes tearGain{0%{opacity:0;transform:translateY(5px) scale(.8)}18%{opacity:1;transform:translateY(0) scale(1.08)}75%{opacity:1}100%{opacity:0;transform:translateY(-11px)}}
-@keyframes tearMeterBeat{0%,100%{transform:scale(1)}18%{transform:scale(1.035)}}
+@keyframes tearMeterBeat{0%,100%{transform:translate(-50%,-100%) scale(1)}18%{transform:translate(-50%,-100%) scale(1.035)}}
 #pauseBtn{display:none;width:28px;height:28px;padding:0;border:0;border-radius:9px;background:rgba(36,32,30,.08);color:var(--ink);align-items:center;justify-content:center;gap:3px;cursor:pointer;touch-action:manipulation}
 #pauseBtn.on{display:flex}
 #pauseBtn i{display:block;width:3px;height:13px;border-radius:2px;background:currentColor}
@@ -196,7 +199,6 @@ body.gamePaused #app *,body.gamePaused #app *::before,body.gamePaused #app *::af
 @keyframes lgWave{from{transform:skewY(-4deg) scaleX(.94)}to{transform:skewY(5deg) scaleX(1.04)}}
 @keyframes lgGlint{0%{transform:skewX(-20deg) translateX(0)}45%,100%{transform:skewX(-20deg) translateX(560px)}}
 .titleBox .btn{font-size:21px;padding:13px 40px;border-radius:16px;box-shadow:0 5px 0 rgba(36,32,30,.35)}
-.titleGoal{margin:-2px 0 8px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.92);box-shadow:0 2px 0 rgba(36,32,30,.12);font-size:14px;font-weight:900;color:var(--ink)}
 
 
 
@@ -226,10 +228,10 @@ body.gamePaused #app *,body.gamePaused #app *::before,body.gamePaused #app *::af
 <div id="dayFade"></div>
 
 <div id="hud">
-  <div class="pill" id="hudRound"><span id="hudRoundText">1일</span><button id="pauseBtn" type="button" title="일시정지 (P)" aria-label="게임 일시정지" aria-hidden="true" disabled><i></i><i></i></button><div id="tearMeter" role="progressbar" aria-label="눈물" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="tearRead"><span>눈물</span><strong id="tearValue">0/100</strong></div><span class="tearTrack"><i id="tearFill"></i></span><b id="tearGain"></b></div></div>
+  <div class="pill" id="hudRound"><span id="hudRoundText">1일</span><button id="pauseBtn" type="button" title="일시정지 (P)" aria-label="게임 일시정지" aria-hidden="true" disabled><i></i><i></i></button></div>
   <div class="pill" id="hudMoney">0원<small id="hudDebt"></small></div>
 </div>
-<div id="labels"></div>
+<div id="labels"><div id="tearMeter" role="progressbar" aria-label="눈물" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="tearRead"><span>눈물</span><strong id="tearValue">0/100</strong></div><span class="tearTrack"><i id="tearFill"></i></span><b id="tearGain"></b></div></div>
 <div id="firstPlaceHint">음식을 눌러 바닥에 놓으세요</div>
 <div id="manualHint"><b>눌러 바로 발사</b><br>끌어서 방향 선택</div>
 <div id="bar"></div>
@@ -983,7 +985,7 @@ function aimEyes(fov){
   for(let i=0;i<22;i++){ const mid=(lo+hi)/2; camera.lookAt(0,mid,-2.0); if(eyeBottomPx()>camView.play) hi=mid; else lo=mid; }
   camera.lookAt(0,(lo+hi)/2,-2.0); camera.updateMatrixWorld(); return (lo+hi)/2;
 }
-function hudBottomPx(){ const h=document.getElementById('hud'); if(!h) return FRAME_TOP_PX; let b=0; for(const c of h.children) b=Math.max(b,c.getBoundingClientRect().bottom); const tm=document.getElementById('tearMeter'); if(tm) b=Math.max(b,tm.getBoundingClientRect().bottom); return Math.max(FRAME_TOP_PX,b+4); }
+function hudBottomPx(){ const h=document.getElementById('hud'); if(!h) return FRAME_TOP_PX; let b=0; for(const c of h.children) b=Math.max(b,c.getBoundingClientRect().bottom); return Math.max(FRAME_TOP_PX,b+4); }
 function frameOk(sides){
   const zs=ROOM.z0+DOOR_KEEPOUT;
   if(scrY(0,FRAME_DOOR_H,ROOM.z0)<camView.top) return false;
@@ -4087,6 +4089,18 @@ function hint(){}
 function setSelected(id,force=false){ selected=!force&&id&&selected===id?null:id; updateBar(); }
 function projectTo(x,y,z,out){ tmpV.set(x,y,z).project(camera); out.x=(tmpV.x*0.5+0.5)*window.innerWidth; out.y=(-tmpV.y*0.5+0.5)*window.innerHeight; out.z=tmpV.z; return out; }
 const scr={x:0,y:0,z:0};
+function positionTearMeter(){
+  const show=G.scene==='play'&&!SELF_HIT.active;
+  tearMeter.classList.toggle('on',show);
+  if(!show) return;
+  projectTo(HEADW.c.x,HEADW.c.y+HEADW.r.y*.72,HEADW.c.z-HEADW.r.z*.69,scr);
+  if(scr.z<-1||scr.z>1){ tearMeter.classList.remove('on'); return; }
+  const bw=tearMeter.offsetWidth||112, bh=tearMeter.offsetHeight||29;
+  const bx=clamp(scr.x,12+bw/2,window.innerWidth-12-bw/2);
+  const by=clamp(scr.y-7,bh+12,Math.max(bh+12,barTopPx()-12));
+  tearMeter.style.left=bx+'px'; tearMeter.style.top=by+'px';
+  tearMeter.style.setProperty('--tail',clamp(scr.x-bx+bw/2,8,bw-8)+'px');
+}
 const loanWrap=$('loanWrap'), loanBtn=$('loanBtn'), loanChoices=$('loanChoices'), loanRemaining=$('loanRemaining'); let loanOpen=false;
 function setLoanOpen(on){
   loanOpen=!!on&&phoneLit()&&!gamePaused;
@@ -4407,7 +4421,7 @@ ${flag(22,-1)}${flag(398,1)}
 
 
 
-function showTitle(){ overlayEl.innerHTML=`<div class="box titleBox">${TITLE_SVG}<div class="titleGoal">첫 월세까지 10일</div><div class="btn" id="btnStart">시작</div></div>`; $('btnStart').addEventListener('pointerdown',ev=>{ ev.stopPropagation(); audioInit(); SFX.click(); overlayEl.innerHTML=''; clearEnemies(); newRun(); startRound(0); }); }
+function showTitle(){ overlayEl.innerHTML=`<div class="box titleBox">${TITLE_SVG}<div class="btn" id="btnStart">시작</div></div>`; $('btnStart').addEventListener('pointerdown',ev=>{ ev.stopPropagation(); audioInit(); SFX.click(); overlayEl.innerHTML=''; clearEnemies(); newRun(); startRound(0); }); }
 
 function billRound(v){ return Math.round(v/10000)*10000; }
 function makeEvictionBill(){
@@ -4647,7 +4661,7 @@ function render(now,dt=1/60){
   if(GI.pant>0){ GI.pant=Math.max(0,GI.pant-dt*0.3); const b=Math.sin(G.time*8.8)*0.045*GI.pant; GI.belly.scale.y=(0.75+0.5*GI.fat)*(1+b); GI.torso.scale.z=(0.78+0.8*GI.fat)*(1+b*0.7); if(GI.pant===0){ GI.belly.scale.y=0.75+0.5*GI.fat; GI.torso.scale.z=0.78+0.8*GI.fat; } }
   eyeTick++; if(eyeTick%2===0||G.scene==='cry'||SELF_HIT.active){ const sf=GI.selfHitFace; const st={tear:G.scene==='cry'||G.scene==='over'?1:Math.max(G.tear,sf.tear||0),blink:0,flinch:sf.flinch||0,squeeze:sf.squeeze||0,red:Math.max(sf.red||0,DANGER.level*.16),flush:sf.flush||0,fat:Math.min(1,G.fat),dark:Math.min(1,G.stain/2.2),t:G.time,wob:Math.max(G.gnawPulse,(G.scene==='cry'||G.tear>0.85)?1:0,SELF_HIT.active?0.45:0),rage:sf.rage||0,impact:sf.impact,hitSide:sf.side,woe:sf.woe||0,wide:sf.wide||0}; for(const E of GI.eyes) drawEye(E,st); }
   if(floorDirty){ floorDirtyT+=dt; if(floorDirtyT>0.2){ floorTex.needsUpdate=true; floorDirty=false; floorDirtyT=0; } }
-  if(hudDirty) updateHUD(); updateBadges(); updateLoanUI(); updatePauseButton(); updateBubbles(dt);
+  if(hudDirty) updateHUD(); updateBadges(); updateLoanUI(); updatePauseButton(); positionTearMeter(); updateBubbles(dt);
   GI.headG.updateWorldMatrix(true,false); FACEMARK.u.uHeadInv.value.copy(GI.headG.matrixWorld).invert(); FACEMARK.u.uFlush.value=GI.selfHitFace.flush||0;
   renderer.render(scene,camera);
 }

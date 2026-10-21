@@ -1803,7 +1803,7 @@ function addFaceDecal(u, size){
   m.rotation.set(0,0,0);
 }
 function clearFaceDecals(){ for(const m of faceDecals){ GI.headG.remove(m); disposeRetryVisual(m,true); } faceDecals.length=0; faceDecalIdx=0; }
-// tear overflow (game over) objects
+// tear overflow objects
 const cryG=new THREE.Group(); scene.add(cryG);
 const beads=[]; for(const s of [-1,1]){ const b=mesh(new THREE.SphereGeometry(1,14,10),M.tear,0,0,0); b.visible=false; cryG.add(b); const trail=[]; for(let i=0;i<7;i++){ const t=mesh(new THREE.SphereGeometry(1,8,6),M.tear,0,0,0); t.visible=false; cryG.add(t); trail.push(t); } beads.push({side:s,mesh:b,trail}); }
 const stainTex=(()=>{ const c=mkCanvas(128,128), g=c.getContext('2d'); g.clearRect(0,0,128,128);
@@ -3404,6 +3404,7 @@ function snapshot(){
 }
 function startRound(r){
   if(typeof AIM!=='undefined') cancelAim();
+  resetCryDrops();
   G.round=r; const b=buildSpawns(r); addTrashSpawns(b); G.spawns=b.list; G.cues=b.cues; G.cueIdx=0; G.extra=[]; G.kickAt=0; G.plan=b.plan; G.spawnIdx=0; G.t=0;
   recordBestDay(r+1);
   G.party=(r+1===CFG.PARTY_DAY); setEntrancesForDay(r+1);
@@ -3511,17 +3512,21 @@ function restoreSnap(){
     floorTex.needsUpdate=true;
   }
 }
-function endRound(){
+function endRound(forcedMode){
   G.tearCarry=Math.min(0.6,G.tear*CFG.TEAR_CARRY); G.stain+=G.tear; setStain(G.stain); drag=null; cancelAim(); G.scene='cut';
   const fat1=fatAfterRound(G.fat,G.eaten);
   const ph0=rand(0,Math.PI/0.55);   // where the steps fall changes from day to day, so the prints fill in a path
-  const mode=nightOutcome(), fare=mode==='late'?Math.round(rand(CFG.TAXI[0],CFG.TAXI[1])/100)*100:0; G.lastStay=mode==='stay'; G.lastMode=mode;
+  const mode=forcedMode||nightOutcome(), fare=mode==='late'?Math.round(rand(CFG.TAXI[0],CFG.TAXI[1])/100)*100:0; G.lastStay=mode==='stay'; G.lastMode=mode;
   CUT={t:0,walkPh:ph0,counted:false,paid:false,debtFloat:0,debtFloatAt:Infinity,debtShown:false,doorOpened:false,doorClosed:false,reopened:false,closed2:false,allowSkip:G.round>0,fat1,T:cutTimes(G.fat,fat1),lastStep:Math.floor(ph0*0.55/Math.PI),ink:0,out:true,outDone:false,backDone:false,
-    mode, stayReason:mode==='stay'?missedWorkReason():'', T0:mode==='late'?1.6:0, h0:0, fare, taxi:mode==='late'&&G.money>=fare, clockIn:'00:'+Math.floor(rand(41,59)), alarm:false, S:{tryEnd:1.7,nightEnd:6.7,end:7.8}};
+    mode, stayReason:mode==='stay'?'출근하기 싫어졌다.':'', T0:mode==='late'?1.6:0, h0:0, fare, taxi:mode==='late'&&G.money>=fare, clockIn:'00:'+Math.floor(rand(41,59)), alarm:false, S:{tryEnd:1.7,nightEnd:6.7,end:7.8}};
   const sk=$('cutSkip'); if(sk){ sk.textContent=mode==='stay'?'건너뛰기 ›':'출근 건너뛰기 ›'; sk.setAttribute('aria-label',mode==='stay'?'장면 건너뛰기':'출근 장면 건너뛰기'); }
   showBar(false); SFX.setMurmur(0); hideGhost(); updateSelfHitBtn();
 }
-function startCry(){ drag=null; cancelAim(); G.scene='cry'; CRY={t:0,dropped:[false,false],mini:null,jji:false,exit:false,et:0}; showBar(false); SFX.setMurmur(0); hideGhost(); setSelected(null); updateSelfHitBtn(); SFX.tearDrop(); for(const e of EN.list){ if(e.bubble){ e.bubble.remove(); e.bubble=null; } } }
+function resetCryDrops(){
+  for(const b of beads){ b.mesh.visible=false; b.trail.forEach(t=>t.visible=false); }
+  for(const w of wetSpots){ w.visible=false; w.scale.setScalar(0.001); }
+}
+function startCry(){ drag=null; cancelAim(); resetCryDrops(); G.scene='cry'; CRY={t:0,dropped:[false,false],mini:null,jji:false}; showBar(false); SFX.setMurmur(0); hideGhost(); setSelected(null); updateSelfHitBtn(); SFX.tearDrop(); for(const e of EN.list){ if(e.bubble){ e.bubble.remove(); e.bubble=null; } } }
 
 /* ---------- enemy update ---------- */
 const dirTmp=[0,0]; let simDt=0;
@@ -3749,22 +3754,13 @@ function updPhone(dt){
   const buzz=(lit&&canBorrow&&phoneBuzzT>1.3)||ring; PHONEG.g.rotation.y=-0.42+(buzz?Math.sin(G.time*70)*0.06:0); PHONEG.g.position.x=PHONE.x+(buzz?Math.sin(G.time*83)*0.004:0);
 }
 /* ---------- cutscene (출근) ---------- */
-// What the night will be: out to work, overslept and into a taxi, or never out of bed. It mostly comes from the state
-// he is in: a room going off (mold, rotting leftovers), the weight, how much he has cried. Never in the first days.
+// What the night will be on a completed day: out to work, or overslept and into a taxi. Missing a shift is not random;
+// it happens only after the tears overflow and the player abandons that night's work.
 function messLevel(){ let rot=0; for(const m of trash) if(m.userData.kind==='food') rot++; return clamp(lumpArea()/LUMP_CAP,0,1)*0.4+clamp(rot/10,0,1)*0.25+trashFill()*0.35; }
 function nightOutcome(){ const day=G.round+1; if(day<=1) return 'work';
   const mess=messLevel(), f=clamp(G.fat/1.4,0,1), s=clamp(G.stain/2.2,0,1);
-  const pStay=day<=2?0:clamp(0.01+0.05*mess+0.04*f+0.05*s,0,0.15)*(G.lastStay?0.4:1);
   const pLate=clamp(0.09+0.06*f+0.05*s+0.04*mess,0,0.28);
-  const r=Math.random(); return r<pStay?'stay':r<pStay+pLate?'late':'work'; }
-function missedWorkReason(){
-  const reasons=[
-    {score:0.05*messLevel(),text:'썩은 냄새에 밤새 잠을 설쳤다.'},
-    {score:0.04*clamp(G.fat/1.4,0,1),text:'몸을 일으키지 못했다.'},
-    {score:0.05*clamp(G.stain/2.2,0,1),text:'눈을 떴을 땐 이미 근무 시작 시간이었다.'}
-  ].sort((a,b)=>b.score-a.score);
-  return reasons[0].score>0.008?reasons[0].text:'알람을 끄고 다시 눈을 감았다.';
-}
+  return Math.random()<pLate?'late':'work'; }
 // the night itself, whether he is at work or still in bed: the day ticks over, the room dims, food goes off, the clock
 // and the window run on to morning
 function nightStart(c){ if(c.nightOn) return; c.nightOn=true; G.round++; hudDirty=true; G.fat=c.fat1; GI.setFat(G.fat); updHeadW(); }
@@ -4005,39 +4001,11 @@ function skipCut(){
 
 function setCutSkip(on){ const b=$('cutSkip'); if(!b) return; on=!!on; b.classList.toggle('on',on); b.disabled=!on; b.tabIndex=on?0:-1; b.setAttribute('aria-hidden',String(!on)); }
 
-/* ---------- cry (game over) ---------- */
-function beginCryExit(c){
-  c.exit=true; c.et=0; c.T=cutTimes(G.fat,G.fat); c.walkPh=rand(0,Math.PI/0.55); c.lastStep=Math.floor(c.walkPh*0.55/Math.PI); c.out=true; c.ink=0.5;
-  jjiBubble.style.display='none'; tearBubble.style.display='none'; smsClear();
-  clearEnemies(); c.mini=null;
-}
-function updCryExit(c,dt){
-  c.et+=dt; const t=c.et, T=c.T, k0=G.fat, lieP=new V3(0,0.17,0.735), standP=new V3(0,0.86,0.91);
-  camMix=clamp(t/T.rise,0,1);
-  const walkStep=()=>{ const si=Math.floor(c.walkPh*0.55/Math.PI); if(si!==c.lastStep){ c.lastStep=si; SFX.heavyStep(k0); commuteStep(c); } };
-  if(t<T.rise){
-    GI.splay.visible=false; const u=t/T.rise, rock=Math.min(1,k0)>0.3?0.5:0;
-    if(u<rock){ const r=u/rock; GI.root.rotation.set(-Math.PI/2,Math.sin(r*Math.PI*3)*0.32*Math.min(1,k0),0); GI.root.position.copy(lieP); if(!c.huffed){ c.huffed=true; SFX.huff(k0); } }
-    else { const k=easeOut((u-rock)/(1-rock)), lieArm=0.24+0.3*Math.min(1.4,k0); GI.root.rotation.set(lerp(-Math.PI/2,0,k),0,0); GI.root.position.lerpVectors(lieP,standP,k); GI.bellyPose(1-k);
-      GI.legL.rotation.set(0,0,(0.04+0.08*k0)*(1-k)); GI.legR.rotation.set(0,0,-(0.04+0.08*k0)*(1-k)); GI.armL.rotation.set(lerp(-0.08,0.03,k),0,-lerp(lieArm,GI.armOut(),k)); GI.armR.rotation.set(lerp(-0.08,0.03,k),0,lerp(lieArm,GI.armOut(),k)); GI.elbowL.rotation.set(lerp(-0.10,-0.18,k),0,0.04); GI.elbowR.rotation.set(lerp(-0.10,-0.18,k),0,-0.04);
-      GI.lying=false; GI.workGear.visible=k>0.86; }
-  } else if(t<T.turn){
-    GI.workGear.visible=true; const k=(t-T.rise)/(T.turn-T.rise); GI.stand(standP.x,standP.z,Math.PI*easeOut(k));
-  } else if(t<T.exit){
-    let z, yaw=Math.PI, wob=0;
-    if(t<T.walkA){ const k=(t-T.turn)/(T.walkA-T.turn); z=lerp(standP.z,-3.2,k); }
-    else if(t<T.doorIn){ const k=(t-T.walkA)/(T.doorIn-T.walkA); z=lerp(-3.2,-3.95,T.sq0?ease(k):k);
-      if(T.sq0){ const b=Math.sin(Math.min(1,k*1.25)*Math.PI); yaw=Math.PI-b*Math.PI/2; wob=Math.sin(t*26)*0.06*b; if(!c.sqd){ c.sqd=true; SFX.squeeze(); camShake=0.004; camShakeT=0.9; } if(k>0.88&&!c.popd){ c.popd=true; SFX.pop(); } } }
-    else { const k=(t-T.doorIn)/(T.exit-T.doorIn); z=lerp(-3.95,-4.75,k); }
-    GI.stand(0.1*clamp((standP.z-z)/4,0,1),z,yaw); c.walkPh+=dt*13/(1+0.35*k0); GI.walkPose(c.walkPh,1); GI.root.rotation.z+=wob; walkStep();
-    if(!c.doorOpened&&z<-2.2){ c.doorOpened=true; doorTarget=1.48; SFX.door(); }
-  } else {
-    camMix=1;
-    if(!c.outDone){ c.outDone=true; GI.root.visible=false; doorTarget=0; SFX.doorClose();
-      sms('근무 알림',WEB+'금일 야간 근무 확정되었습니다.\n00:00 - 09:00',{hold:2.8,sticky:G.rentOwed<=0});
-      if(G.rentOwed>0) sms('집주인','월세 아직 안 들어왔어요.',{sticky:true}); }
-    if(t>=T.exit+5.0){ CRY=null; G.scene='over'; showGameOver({keepSms:true,noWorkSms:true}); }
-  }
+/* ---------- cry: lose one shift, not the run ---------- */
+function finishCryAsAbsence(c){
+  jjiBubble.style.display='none'; tearBubble.style.display='none';
+  clearEnemies(); clearProjectiles(); zones.length=0; PT.list.length=0; resetCryDrops(); c.mini=null; CRY=null;
+  endRound('stay');
 }
 function updCry(dt){
   const c=CRY; c.t+=dt; const t=c.t;
@@ -4050,8 +4018,7 @@ function updCry(dt){
     else { if(!c.dropped[i]){ c.dropped[i]=true; SFX.plop(); B.mesh.visible=false; wetSpots[i].visible=true; } const k=clamp((t-1.9)/1.1,0,1); wetSpots[i].scale.setScalar(0.001+easeOut(k)*0.07); }
   }
   updParts(dt); updTearBubble(t); updMini(c,t,dt);
-  if(!c.exit&&t>=6.25) beginCryExit(c);
-  if(c.exit) updCryExit(c,dt);
+  if(t>=6.25) finishCryAsAbsence(c);
 }
 function surfPointW(d){ return new V3(HEADW.c.x+d.x*HEADW.r.x*1.01,HEADW.c.y+d.y*HEADW.r.y*1.01,HEADW.c.z+d.z*HEADW.r.z*1.01); }
 
@@ -4643,7 +4610,8 @@ window.__dbg={ G, EN, get towers(){return towers;}, get projs(){return projs;}, 
         step(dt); }
       else if(G.scene==='hush'){ step(dt); }
       else if(G.scene==='cut'){ CUT.t=99; updCut(dt); }
-      else if(G.scene==='cry'||G.scene==='over'){ log.push({dead:true,round:G.round,kills:G.kills,money:G.money}); return log; }
+      else if(G.scene==='cry'){ step(dt); }
+      else if(G.scene==='over'){ log.push({dead:true,round:G.round,kills:G.kills,money:G.money}); return log; }
       if(G.round>=maxRounds){ log.push({survived:true,round:G.round,kills:G.kills,money:G.money}); return log; } }
     return log; }
 };

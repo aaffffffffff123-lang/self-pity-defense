@@ -54,19 +54,19 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 .badge{position:absolute;transform:translate(-50%,-100%);background:rgba(255,255,255,.94);border-radius:10px;padding:1px 7px;font-size:11px;font-weight:800;white-space:nowrap;box-shadow:0 1px 0 rgba(90,60,0,.15);pointer-events:none}
 .ammoBadge{font-size:10px;opacity:.55;padding:1px 6px;transition:opacity .15s,color .15s,background .15s}
 .ammoBadge.low{opacity:1;color:var(--red);background:#FFF1E8;box-shadow:0 2px 0 rgba(226,55,68,.18)}
-#toast{position:absolute;left:50%;top:calc(var(--sat) + 66px);transform:translateX(-50%);background:rgba(255,255,255,.96);color:var(--ink);padding:9px 16px;border-radius:14px;font-size:13px;font-weight:700;white-space:nowrap;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:0 2px 0 rgba(90,60,0,.14)}
+#toast{position:absolute;left:50%;top:calc(var(--sat) + 84px);transform:translateX(-50%);background:rgba(255,255,255,.96);color:var(--ink);padding:9px 16px;border-radius:14px;font-size:13px;font-weight:700;white-space:nowrap;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:0 2px 0 rgba(90,60,0,.14)}
 #cutCaption{position:absolute;left:50%;bottom:calc(var(--sab) + 78px);z-index:17;max-width:min(calc(100vw - 32px),420px);transform:translate(-50%,10px);padding:8px 14px;border-radius:9px;background:rgba(20,18,17,.82);color:#fff;font-size:14px;font-weight:700;line-height:1.4;text-align:center;white-space:nowrap;opacity:0;transition:opacity .22s,transform .22s;pointer-events:none;text-shadow:0 1px 1px #000}
 #cutCaption.on{opacity:1;transform:translate(-50%,0)}
 #overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
 /* a text arriving on the phone: the usual notification card, under the top bar */
-#sms{position:absolute;left:50%;top:calc(var(--sat) + 60px);width:min(calc(100vw - 24px),360px);transform:translate(-50%,-12px);opacity:0;pointer-events:none;background:rgba(255,255,255,.97);border-radius:16px;padding:9px 13px 10px;box-shadow:0 8px 22px rgba(36,32,30,.16),0 1px 0 rgba(36,32,30,.08);transition:opacity .25s,transform .25s;z-index:18;text-align:left}
+#sms{position:absolute;left:50%;top:calc(var(--sat) + 84px);width:min(calc(100vw - 24px),360px);transform:translate(-50%,-12px);opacity:0;pointer-events:none;background:rgba(255,255,255,.97);border-radius:16px;padding:9px 13px 10px;box-shadow:0 8px 22px rgba(36,32,30,.16),0 1px 0 rgba(36,32,30,.08);transition:opacity .25s,transform .25s;z-index:18;text-align:left}
 #sms.on{opacity:1;transform:translate(-50%,0)}
 #sms .smsHead{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:rgba(36,32,30,.5);margin-bottom:3px}
 #sms .smsHead::before{content:"";width:15px;height:15px;border-radius:4px;background:#34C759;flex:none}
 #sms .smsFrom{color:var(--ink);font-weight:800}
 #sms .smsTime{margin-left:auto;font-weight:500}
 #sms .smsBody{font-size:13px;font-weight:600;line-height:1.45;white-space:pre-line;color:var(--ink);word-break:keep-all}
-#sms.on ~ #toast{top:calc(var(--sat) + 150px)}
+#sms.on ~ #toast{top:calc(var(--sat) + 174px)}
 #toast.wrap{white-space:normal;width:min(calc(100vw - 32px),360px);text-align:center;line-height:1.45}
 #firstPlaceHint{position:absolute;left:50%;bottom:calc(var(--sab) + clamp(105px,17vh,142px));z-index:18;transform:translate(-50%,8px);padding:8px 14px 9px;border-radius:13px;background:rgba(36,32,30,.94);color:#fff;font-size:13px;font-weight:800;line-height:1.3;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;box-shadow:0 3px 0 rgba(0,0,0,.18)}
 #firstPlaceHint::after{content:"↓";position:absolute;left:50%;top:100%;transform:translateX(-50%);color:#E23744;font-size:28px;line-height:1;animation:firstPlaceBob .75s ease-in-out infinite alternate}
@@ -155,7 +155,20 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 .hide{display:none!important}
  
 #dayFade{position:absolute;inset:0;background:#13151e;opacity:0;pointer-events:none}
-#hudRound{font-size:17px;padding:5px 6px 5px 12px;display:flex;align-items:center;gap:7px;pointer-events:auto}
+#hudRound{position:relative;font-size:17px;padding:5px 6px 5px 12px;display:flex;align-items:center;gap:7px;pointer-events:auto}
+#tearMeter{position:absolute;left:0;top:calc(100% + 5px);width:clamp(94px,27vw,112px);padding:3px 6px 5px;border-radius:9px;background:rgba(255,255,255,.93);box-shadow:0 2px 0 rgba(90,60,0,.12);font-size:10px;line-height:1;color:var(--ink);pointer-events:none;transition:transform .18s,background .18s}
+#tearMeter .tearRead{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;font-weight:900}
+#tearValue{font-variant-numeric:tabular-nums;opacity:.68}
+.tearTrack{display:block;height:5px;overflow:hidden;border-radius:99px;background:rgba(36,32,30,.13)}
+#tearFill{display:block;width:100%;height:100%;border-radius:inherit;background:#53A8E2;transform:scaleX(0);transform-origin:left center;transition:transform .12s linear,background .2s}
+#tearMeter.warn #tearFill{background:#E7A51B}
+#tearMeter.danger #tearFill{background:#E9633F}
+#tearMeter.critical{background:#FFF0EE;animation:tearMeterBeat .58s ease-in-out infinite}
+#tearMeter.critical #tearFill{background:var(--red)}
+#tearGain{position:absolute;right:-3px;top:-10px;opacity:0;color:var(--red);font-size:12px;font-weight:900;text-shadow:0 1px 0 #fff,1px 0 0 #fff,-1px 0 0 #fff;white-space:nowrap}
+#tearGain.on{animation:tearGain 1s ease-out forwards}
+@keyframes tearGain{0%{opacity:0;transform:translateY(5px) scale(.8)}18%{opacity:1;transform:translateY(0) scale(1.08)}75%{opacity:1}100%{opacity:0;transform:translateY(-11px)}}
+@keyframes tearMeterBeat{0%,100%{transform:scale(1)}18%{transform:scale(1.035)}}
 #pauseBtn{display:none;width:28px;height:28px;padding:0;border:0;border-radius:9px;background:rgba(36,32,30,.08);color:var(--ink);align-items:center;justify-content:center;gap:3px;cursor:pointer;touch-action:manipulation}
 #pauseBtn.on{display:flex}
 #pauseBtn i{display:block;width:3px;height:13px;border-radius:2px;background:currentColor}
@@ -213,7 +226,7 @@ body.gamePaused #app *,body.gamePaused #app *::before,body.gamePaused #app *::af
 <div id="dayFade"></div>
 
 <div id="hud">
-  <div class="pill" id="hudRound"><span id="hudRoundText">1일</span><button id="pauseBtn" type="button" title="일시정지 (P)" aria-label="게임 일시정지" aria-hidden="true" disabled><i></i><i></i></button></div>
+  <div class="pill" id="hudRound"><span id="hudRoundText">1일</span><button id="pauseBtn" type="button" title="일시정지 (P)" aria-label="게임 일시정지" aria-hidden="true" disabled><i></i><i></i></button><div id="tearMeter" role="progressbar" aria-label="눈물" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="tearRead"><span>눈물</span><strong id="tearValue">0/100</strong></div><span class="tearTrack"><i id="tearFill"></i></span><b id="tearGain"></b></div></div>
   <div class="pill" id="hudMoney">0원<small id="hudDebt"></small></div>
 </div>
 <div id="labels"></div>
@@ -307,7 +320,7 @@ const CFG = {
   // bill on the 3rd morning, gas and power on the 7th, rent on the 10th. What the account can't cover is owed, and
   // whatever comes in goes to that first.
   WAGE: 113520, HOUR_NIGHT: 15480, WEEK: 5, WEEKLY_PAY: 82560, MONTH: 10,
-  RENT: 450000, RENT_DAY: 0, PHONE_BILL: 56870, PHONE_DAY: 3, UTIL: [36000,52000], UTIL_DAY: 7, SAVE: 20000,
+  RENT: 450000, DEPOSIT: 2000000, RENT_DAY: 0, PHONE_BILL: 56870, PHONE_DAY: 3, UTIL: [36000,52000], UTIL_DAY: 7, SAVE: 20000,
   TAXI: [15000,29000],
   // Nothing is ever taken out: a day after it's emptied, packaging goes on the heaps along the walls (a pizza or
   // chicken box counts for more). The fuller the room, the more selves come (few at first, steeply more as it fills,
@@ -970,7 +983,7 @@ function aimEyes(fov){
   for(let i=0;i<22;i++){ const mid=(lo+hi)/2; camera.lookAt(0,mid,-2.0); if(eyeBottomPx()>camView.play) hi=mid; else lo=mid; }
   camera.lookAt(0,(lo+hi)/2,-2.0); camera.updateMatrixWorld(); return (lo+hi)/2;
 }
-function hudBottomPx(){ const h=document.getElementById('hud'); if(!h) return FRAME_TOP_PX; let b=0; for(const c of h.children) b=Math.max(b,c.getBoundingClientRect().bottom); return Math.max(FRAME_TOP_PX,b+4); }
+function hudBottomPx(){ const h=document.getElementById('hud'); if(!h) return FRAME_TOP_PX; let b=0; for(const c of h.children) b=Math.max(b,c.getBoundingClientRect().bottom); const tm=document.getElementById('tearMeter'); if(tm) b=Math.max(b,tm.getBoundingClientRect().bottom); return Math.max(FRAME_TOP_PX,b+4); }
 function frameOk(sides){
   const zs=ROOM.z0+DOOR_KEEPOUT;
   if(scrY(0,FRAME_DOOR_H,ROOM.z0)<camView.top) return false;
@@ -2142,7 +2155,9 @@ function finishEnter(e){
   if(!e.alive) return;
   const mass=Math.max(1,Math.round(e.kind==='lump'?(e.faces||e.mass||1):(e.mass||1)));
   G.invaders+=mass;
+  const before=G.tear;
   G.tear=Math.min(1,G.tear+CFG.ENTRY_TEAR*mass);
+  queueTearGain(G.tear-before);
   G.gnawPulse=1;
   chargeUltimate(20);
   removeEnemy(e);
@@ -2732,7 +2747,7 @@ function updLumps(dt){ let i=0;
   FLY_IM.count=i; FLY_IM.instanceMatrix.needsUpdate=true; updFlySound(); if(retiring.length) updRetiring(dt); }
 // Walking over rotten food: a good chance of landing on your bottom.
 function slipCheck(e){ for(const L of lumps){ if(e.slipLump===L.id) continue; if(Math.hypot(L.x-e.x,L.z-e.z)<L.r*0.85){ e.slipLump=L.id; if(Math.random()<0.55){ e.state='slip'; e.t=0; e.vx*=0.2; e.vz*=0.2; SFX.slip(); } return; } } }
-function seedLumps(){ makeLump('pizza',0.5,-2.36,2); }
+function seedLumps(){ const L=makeLump('pizza',0.5,-2.36,2); L.seed=true; }
 
 /* ---------- what the day leaves on the floor ----------
    Thrown food (a burger that rolled out, a chicken that landed) dries brown overnight and keeps a fly or two;
@@ -3393,7 +3408,7 @@ function snapshot(){
       id:t.food.id,x:t.x,z:t.z,ammo:t.ammo
     })),
     lumps:lumps.map(L=>({
-      food:L.food,x:L.x,z:L.z,age:L.age
+      food:L.food,x:L.x,z:L.z,age:L.age,seed:!!L.seed
     })),
     floor:fctx.getImageData(0,0,floorCv.width,floorCv.height),
     trash:trash.map(cloneRetryVisual),
@@ -3409,6 +3424,7 @@ function startRound(r){
   recordBestDay(r+1);
   G.party=(r+1===CFG.PARTY_DAY); setEntrancesForDay(r+1);
   G.eaten=0; G.tear=G.tearCarry||0; G.invaders=0; G.gnawPulse=0; G.stallT=0; G.scene='play'; setStain(G.stain);
+  resetTearMeterUI();
   resetDanger();
   doorRattle=0; SFX.setMurmur(0); clearEnemies(); resetLineBags(); resetSelfHitForRound(); snapshot(); hudDirty=true; showBar(true);
   if(G.round%CFG.MONTH===(CFG.RENT_DAY+CFG.MONTH-3)%CFG.MONTH&&G.remindDay!==G.round){ G.remindDay=G.round; sms('은행',WEB+'3일 뒤 월세 '+won(CFG.RENT)+' 자동이체 예정입니다.'); }
@@ -3443,7 +3459,7 @@ function restoreSnap(){
   G.stain=s.stain;
   G.debt=s.debt;
   G.loanBalance=s.loanBalance||0;
-  G.weekMiss=s.weekMiss||0; G.monthMiss=s.monthMiss||0; G.monthFood=s.monthFood||0; G.monthBuys=s.monthBuys||0; G.monthTaxi=s.monthTaxi||0; G.monthTaxiN=s.monthTaxiN||0; G.monthClean=s.monthClean||0; G.rentOwed=s.rentOwed||0; G.billOwed=s.billOwed||0; G.evictDue=s.evictDue===undefined?-1:s.evictDue; G.evicted=false;
+  G.weekMiss=s.weekMiss||0; G.monthMiss=s.monthMiss||0; G.monthFood=s.monthFood||0; G.monthBuys=s.monthBuys||0; G.monthTaxi=s.monthTaxi||0; G.monthTaxiN=s.monthTaxiN||0; G.monthClean=s.monthClean||0; G.rentOwed=s.rentOwed||0; G.billOwed=s.billOwed||0; G.evictDue=-1; G.evicted=false;
   G.trashV=s.trashV||0; G.cleanBooked=s.cleanBooked||0; G.propsGone=!!s.propsGone; emptyRoom(false); setPropsVisible(!G.propsGone); G.saveN=s.saveN||0; G.saveMiss=s.saveMiss||0; G.lastStay=!!s.lastStay;
   smsClear();
   G.tear=0;
@@ -3463,7 +3479,7 @@ function restoreSnap(){
   for(const st of s.towers) makeTower(st.id,st.x,st.z,st.ammo);
 
   clearLumps();
-  for(const L of s.lumps) makeLump(L.food,L.x,L.z,L.age);
+  for(const L of s.lumps){ const M=makeLump(L.food,L.x,L.z,L.age); M.seed=!!L.seed; }
 
   clearProjectiles();
   zones.length=0;
@@ -3776,8 +3792,8 @@ function nightTick(c,k,dt){
 }
 function payTaxi(c){ if(!c.taxi||c.taxiPaid) return; c.taxiPaid=true; const f=Math.min(G.money,c.fare); G.money-=f; G.monthTaxi+=f; G.monthTaxiN++; hudDirty=true; floatMoney('-'+won(f),'minus'); SFX.broke(); sms('카드',WEB+'승인 '+won(f)+' 택시\n잔액 '+won(G.money)); }
 // Morning: what the night paid, then what the month takes. What's owed comes out of the account first, all of it
-// that's there: rent arrears, then unpaid bills, then the phone loan. Rent that can't be paid in full has to be
-// cleared within two mornings or the landlord wants the room back.
+// that's there: rent arrears, then unpaid bills, then the phone loan. A first short rent is a warning; the lease
+// only ends once the remaining arrears reach two full rents, so partial repayments can still stave it off.
 function payBill(amt,label,kind){ const paid=Math.min(G.money,amt), owed=amt-paid; G.money-=paid;
   if(paid>0) sms('은행',WEB+'출금 '+won(paid)+' '+label+(owed?' (일부)':'')+'\n잔액 '+won(G.money));
   else sms('은행',WEB+label+' '+won(amt)+'\n잔액 부족으로 출금되지 않았습니다.');
@@ -3792,13 +3808,14 @@ function accrueLoanInterest(){
 }
 function collectOwed(){ let back=Math.min(G.debt,G.money); if(back<=0) return 0; const total=back;
   const take=(amt,label)=>{ if(amt<=0) return; G.debt-=amt; G.money-=amt; back-=amt; sms('은행',WEB+'출금 '+won(amt)+' '+label+'\n잔액 '+won(G.money)); };
-  const r=Math.min(G.rentOwed,back); G.rentOwed-=r; take(r,'월세 미납분'); if(r>0&&G.rentOwed<=0) G.evictDue=-1;
+  const r=Math.min(G.rentOwed,back); G.rentOwed-=r; take(r,'월세 미납분');
   const b=Math.min(G.billOwed,back); G.billOwed-=b; take(b,'미납 요금');
   const l=Math.min(G.loanBalance,back); G.loanBalance-=l; take(l,'대출 상환');
   return total-back; }
 function settleMorning(showFx=true){
   const c=CUT; if(!c||c.paid) return; c.paid=true;
   const n=G.round, md=n%CFG.MONTH, worked=c.mode!=='stay', docked=c.mode==='late'&&!c.taxi;
+  G.evictDue=-1;
   let pay=worked?CFG.WAGE-(docked?CFG.HOUR_NIGHT:0):0, weekly=0;
   if(!worked){ G.weekMiss++; G.monthMiss++; }
   if(n%CFG.WEEK===0){ if(!G.weekMiss) weekly=CFG.WEEKLY_PAY; G.weekMiss=0; }
@@ -3809,15 +3826,15 @@ function settleMorning(showFx=true){
   if(md===CFG.RENT_DAY&&n>0) accrueLoanInterest();
   let out=collectOwed();
   if(showFx&&income>0){ SFX.coin(); if(weekly) SFX.bonus(); floatMoney('+'+won(income),'plus'); }
-  // rent still owed from the last rent day: one more morning, then out
-  if(G.rentOwed>0&&G.evictDue>0){
-    if(n>=G.evictDue){ G.evicted=true; sms('집주인','더는 못 기다립니다. 방 빼 주세요.'); c.debtFloat=out; c.debtFloatAt=c.t+0.65; if(!showFx) c.debtShown=true; hudDirty=true; return; }
-    if(n===G.evictDue-1) sms('집주인','내일까지입니다.'); }
-  else if(G.rentOwed<=0) G.evictDue=-1;
   // the month's bills, each on its own morning
   if(md===CFG.RENT_DAY&&n>0){
     const {paid,owed}=payBill(CFG.RENT,'월세','rent'); out+=paid;
-    if(owed){ G.evictDue=n+2; sms('집주인','월세 '+won(owed)+' 아직 안 들어왔어요. 모레까지 안 되면 방 빼 주셔야 합니다.'); }
+    if(G.rentOwed>=CFG.RENT*2){
+      G.evicted=true;
+      sms('집주인','월세가 두 달치 밀렸습니다.\n계약 해지하겠습니다. 방 정리해 주세요.');
+      c.debtFloat=out; c.debtFloatAt=c.t+0.65; if(!showFx) c.debtShown=true; hudDirty=true; return;
+    }
+    if(owed||G.rentOwed>0) sms('집주인','월세 미납액 '+won(G.rentOwed)+' 확인 부탁드립니다.\n다음 월세일까지 정리해 주세요.');
     // the one saving there is: a few won a month toward a flat of his own, if anything is left once the rent is out
     if(G.money>=CFG.SAVE){ G.money-=CFG.SAVE; out+=CFG.SAVE; G.saveN++; sms('은행',WEB+'출금 '+won(CFG.SAVE)+' 주택청약\n잔액 '+won(G.money)); }
     else { G.saveMiss++; sms('은행',WEB+'주택청약 '+won(CFG.SAVE)+'\n잔액 부족으로 출금되지 않았습니다.'); }
@@ -4026,6 +4043,24 @@ function surfPointW(d){ return new V3(HEADW.c.x+d.x*HEADW.r.x*1.01,HEADW.c.y+d.y
    UI
    ========================================================= */
 const barEl=$('bar'), hudMoney=$('hudMoney'), hudRound=$('hudRound'), hudRoundText=$('hudRoundText'), labelsEl=$('labels'), toastEl=$('toast'), overlayEl=$('overlay');
+const tearMeter=$('tearMeter'), tearFill=$('tearFill'), tearValue=$('tearValue'), tearGain=$('tearGain');
+const TEAR_UI={gain:0,t:0};
+function resetTearMeterUI(){ TEAR_UI.gain=0; TEAR_UI.t=0; tearGain.textContent=''; tearGain.classList.remove('on'); updateTearMeter(0); }
+function queueTearGain(amount){
+  if(amount<=0) return;
+  TEAR_UI.gain+=amount*100; TEAR_UI.t=1;
+  tearGain.textContent='+'+Math.max(1,Math.round(TEAR_UI.gain));
+  tearGain.classList.remove('on'); void tearGain.offsetWidth; tearGain.classList.add('on');
+}
+function updateTearMeter(dt){
+  const k=clamp(G.tear,0,1), pct=k>=1?100:Math.floor(k*100);
+  tearFill.style.transform=`scaleX(${k})`; tearValue.textContent=pct+'/100';
+  tearMeter.setAttribute('aria-valuenow',String(pct));
+  tearMeter.classList.toggle('warn',k>=.6&&k<.8);
+  tearMeter.classList.toggle('danger',k>=.8&&k<.93);
+  tearMeter.classList.toggle('critical',k>=.93);
+  if(TEAR_UI.t>0){ TEAR_UI.t-=dt; if(TEAR_UI.t<=0){ TEAR_UI.gain=0; tearGain.classList.remove('on'); } }
+}
 const firstPlaceHint=$('firstPlaceHint'), manualHint=$('manualHint');
 const dangerVignette=$('dangerVignette'), dangerBadge=document.createElement('div');
 dangerBadge.className='badge'; dangerBadge.textContent='!'; dangerBadge.style.cssText='display:none;width:25px;height:25px;padding:1px 0;border-radius:50%;background:#E23744;color:#fff;font-size:18px;line-height:23px;text-align:center;box-shadow:0 0 0 4px rgba(226,55,68,.22)'; labelsEl.appendChild(dangerBadge);
@@ -4373,29 +4408,82 @@ ${flag(22,-1)}${flag(398,1)}
 
 
 function showTitle(){ overlayEl.innerHTML=`<div class="box titleBox">${TITLE_SVG}<div class="titleGoal">첫 월세까지 10일</div><div class="btn" id="btnStart">시작</div></div>`; $('btnStart').addEventListener('pointerdown',ev=>{ ev.stopPropagation(); audioInit(); SFX.click(); overlayEl.innerHTML=''; clearEnemies(); newRun(); startRound(0); }); }
-// Evicted: the landlord's last text, the room goes dark, and comes back the way it will be shown to the next
-// tenant: no bed, no things, no rubbish, a clean floor, morning in the window. No text over it.
+
+function billRound(v){ return Math.round(v/10000)*10000; }
+function makeEvictionBill(){
+  // The room begins with one old pizza lump as scenery. It soon rots away, so exclude the marked seed only while
+  // it actually remains; every later lump and fly came from the player's food.
+  const heap=trashFill(), loose=clamp(trash.length/24,0,1);
+  const dirty=Math.max(heap,loose);
+  let seedFlies=0, playerLumps=0;
+  for(const L of lumps){ if(L.seed) seedFlies+=L.flies.length; else playerLumps++; }
+  const rot=clamp((playerLumps+rotHosts.length)/8,0,1);
+  const flies=clamp(Math.max(0,flyCount()-seedFlies)/14,0,1);
+  const removal=dirty>.035?billRound(40000+180000*dirty):0;
+  const cleanK=Math.max(dirty,rot);
+  const cleaning=cleanK>.08?billRound(60000+320000*cleanK):0;
+  const pestK=Math.max(flies,rot*.85,clamp((dirty-.65)/.35,0,1));
+  const pest=pestK>.05?billRound(50000+60000*pestK):0;
+  const wallK=Math.max(clamp((dirty-.55)/.45,0,1),clamp((rot-.45)/.55,0,1));
+  const wallpaper=wallK>.15?billRound(120000+180000*wallK):0;
+  const rent=Math.max(0,Math.round(G.rentOwed)), damage=removal+cleaning+pest+wallpaper;
+  const total=rent+damage, refund=Math.max(0,CFG.DEPOSIT-total), extra=Math.max(0,total-CFG.DEPOSIT);
+  return {deposit:CFG.DEPOSIT,rent,removal,cleaning,pest,wallpaper,damage,total,refund,extra,dirty,rot,flies,settled:false};
+}
+function evictionSettlementText(b){
+  const lines=['방 정리 후 정산합니다.','','보증금 '+won(b.deposit)];
+  if(b.rent) lines.push('미납 월세 -'+won(b.rent));
+  if(b.removal) lines.push('폐기물 반출 -'+won(b.removal));
+  if(b.cleaning) lines.push('특수 청소·탈취 -'+won(b.cleaning));
+  if(b.pest) lines.push('해충 방역 -'+won(b.pest));
+  if(b.wallpaper) lines.push('오염 복구·부분 도배 -'+won(b.wallpaper));
+  lines.push('');
+  if(b.refund>0) lines.push('공제 후 '+won(b.refund)+' 입금했습니다.');
+  else if(b.extra>0) lines.push('보증금 전액 공제했습니다.','추가 비용 '+won(b.extra)+' 청구합니다.');
+  else lines.push('보증금 전액 공제했습니다.');
+  return lines.join('\n');
+}
+function settleEvictionBill(b){
+  if(!b||b.settled) return b;
+  b.settled=true;
+  const rentCovered=Math.min(b.rent,b.deposit);
+  G.rentOwed=Math.max(0,G.rentOwed-rentCovered);
+  G.debt=Math.max(0,G.debt-rentCovered);
+  const damageCovered=Math.max(0,b.deposit-b.rent);
+  const damageUncovered=Math.max(0,b.damage-damageCovered);
+  if(damageUncovered){ G.billOwed+=damageUncovered; G.debt+=damageUncovered; }
+  if(b.refund){ G.money+=b.refund; floatMoney('+'+won(b.refund),'plus'); SFX.coin(); }
+  hudDirty=true;
+  return b;
+}
+
+// Evicted: read the termination, widen onto the room exactly as the player left it, then clear it behind a fade.
+// The final landlord text itemises the actual mess and returns only the balance of the deposit.
 let EV=null;
-function startEviction(){ cancelAim(); G.scene='evict'; EV={t:0,swapped:false}; showBar(false); hideGhost(); setSelected(null); updateSelfHitBtn(); SFX.setMurmur(0); SFX.setBuzz(0); clearEnemies(); }
+function startEviction(){ cancelAim(); G.scene='evict'; EV={t:0,read:false,swapped:false,notified:false,bill:makeEvictionBill()}; showBar(false); hideGhost(); setSelected(null); updateSelfHitBtn(); SFX.setMurmur(0); SFX.setBuzz(0); clearEnemies(); }
 function updEvict(dt){ const e=EV; if(!e) return; e.t+=dt; const fade=$('dayFade');
-  // first every text of that morning gets read (the landlord's comes last), then: fade out, stay dark, fade in
-  if(!e.read){ if(fade) fade.style.opacity=0; if((SMS.q.length===0&&!SMS.cur&&e.t>0.6)||e.t>24){ e.read=true; e.t=0; } return; }
-  const t=e.t, A=0.5, B=1.3, Cc=0.8, Dd=1.9;
-  if(t<A){ camMix=0; if(fade) fade.style.opacity=0; return; }
-  if(t<A+B){ camMix=easeOut((t-A)/B); if(fade) fade.style.opacity=easeIn((t-A)/B); return; }
-  if(!e.swapped){ e.swapped=true; camMix=1; smsClear(); emptyRoom(true); }
-  if(t<A+B+Cc){ if(fade) fade.style.opacity=1; return; }
-  if(t<A+B+Cc+Dd){ if(fade) fade.style.opacity=1-easeOut((t-A-B-Cc)/Dd); return; }
-  if(fade) fade.style.opacity=0; EV=null; showGameOver({empty:true}); }
-function emptyRoom(on){ G.empty=on; const v=!on;
+  if(!e.read){ if(fade) fade.style.opacity=0; if((SMS.q.length===0&&!SMS.cur&&e.t>0.6)||e.t>24){ e.read=true; e.t=0; $('hud').classList.add('hush'); $('labels').classList.add('hush'); } return; }
+  const t=e.t, WIDE=1.35, HOLD=1.15, OUT=.75, DARK=.3, IN=1.5, NOTICE=.7;
+  if(t<WIDE){ camMix=easeOut(t/WIDE); if(fade) fade.style.opacity=0; return; }
+  camMix=1;
+  if(t<WIDE+HOLD){ if(fade) fade.style.opacity=0; return; }
+  if(t<WIDE+HOLD+OUT){ if(fade) fade.style.opacity=easeIn((t-WIDE-HOLD)/OUT); return; }
+  if(!e.swapped){ e.swapped=true; smsClear(); emptyRoom(true); }
+  if(t<WIDE+HOLD+OUT+DARK){ if(fade) fade.style.opacity=1; return; }
+  if(t<WIDE+HOLD+OUT+DARK+IN){ if(fade) fade.style.opacity=1-easeOut((t-WIDE-HOLD-OUT-DARK)/IN); return; }
+  if(fade) fade.style.opacity=0;
+  if(!e.notified){ e.notified=true; $('hud').classList.remove('hush'); $('labels').classList.remove('hush'); settleEvictionBill(e.bill); sms('집주인',evictionSettlementText(e.bill),{sticky:true}); }
+  if(t<WIDE+HOLD+OUT+DARK+IN+NOTICE) return;
+  EV=null; showGameOver({empty:true,keepSms:true,refund:e.bill.refund}); }
+function emptyRoom(on,keepHud=false){ G.empty=on; const v=!on;
   furn.visible=v; FURN_M.visible=v; setPropsVisible(v&&!G.propsGone); TP.g.visible=v; towerG.visible=v; GI.root.visible=v; cryG.visible=v; FLY_IM.visible=v;
   for(const m of trash) m.visible=v; for(const L of lumps) L.g.visible=v;
   if(on){ for(const m of stains) m.visible=false; clearProjectiles(); PT.list.length=0; zones.length=0;
     paintFloorBase(); doorTarget=0; doorAng=0; doorHinge.rotation.y=0; BATHG.target=BATHG.ang=0; WING.target=WING.open=0; WING.ladderK=0; WING.dropping=false;
-    windowPane.material.color.setHex(0xE5BD91); windowMoon.visible=false; $('hud').classList.add('hush'); }
+    windowPane.material.color.setHex(0xE5BD91); windowMoon.visible=false; $('hud').classList.toggle('hush',!keepHud); }
   else { $('hud').classList.remove('hush'); setStain(G.stain); }
 }
-function showGameOver(o){ o=o||{}; const empty=!!o.empty, now=G.round+1; recordBestDay(now); cancelAim(); showBar(false); if(!o.keepSms) smsClear(); if(!empty&&!o.noWorkSms) sms('근무 알림',WEB+'금일 야간 근무 확정되었습니다.\n00:00 - 09:00',{sticky:true}); G.scene='over'; overlayEl.innerHTML=`<div class="box gameOverBox"><div class="gameOverRec">이번 ${now}일째 · 최장 ${bestDay}일째</div><div class="btn alt" id="btnRetry">이 판 다시</div><div class="btn" id="btnRestart">처음부터</div></div>`;
+function showGameOver(o){ o=o||{}; const empty=!!o.empty, now=G.round+1; recordBestDay(now); cancelAim(); showBar(false); if(!o.keepSms) smsClear(); if(!empty&&!o.noWorkSms) sms('근무 알림',WEB+'금일 야간 근무 확정되었습니다.\n00:00 - 09:00',{sticky:true}); G.scene='over'; const rec=o.refund===undefined?`이번 ${now}일째 · 최장 ${bestDay}일째`:`이번 ${now}일째 · 보증금 잔액 ${won(o.refund)}`; overlayEl.innerHTML=`<div class="box gameOverBox"><div class="gameOverRec">${rec}</div><div class="btn alt" id="btnRetry">이 판 다시</div><div class="btn" id="btnRestart">처음부터</div></div>`;
   $('btnRetry').addEventListener('pointerdown',ev=>{ ev.stopPropagation(); SFX.click(); overlayEl.innerHTML=''; restoreSnap(); startRound(G.snap.round); });
   $('btnRestart').addEventListener('pointerdown',ev=>{ ev.stopPropagation(); SFX.click(); overlayEl.innerHTML=''; clearEnemies(); newRun(); startRound(0); }); }
 
@@ -4538,6 +4626,7 @@ function step(dt){
   if(cutCaptionT>0){ cutCaptionT-=dt; if(cutCaptionT<=0) hideCutCaption(); }
   if(tipHoldT>0){ tipHoldT-=dt; if(tipHoldT<=0&&!ghost) ghostTip.style.display='none'; }
   if(G.scene!=='play'&&!ghost) ghostTip.style.display='none';
+  updateTearMeter(dt);
 }
 function render(now,dt=1/60){
   applyCamera(); ULTFX.update(dt);
@@ -4596,6 +4685,9 @@ boot();
 window.__dbg={ G, EN, get towers(){return towers;}, get projs(){return projs;}, get lumps(){return lumps;}, FF, FS, CFG, FOODS, cam:camBase, camera, applyCamera, GI, scene, THREE, drawEye, step, spawnFrom, BATHG, WING, startRound, buildSpawns, roundPlan, get CUT(){return CUT;}, updCut, placeValid, isStaticBlocked,
   start(r){ overlayEl.innerHTML=''; clearEnemies(); newRun(); startRound(r||0); },
   loan:takeLoan, clean:bookCleaning,
+  evictionBill:makeEvictionBill, settleEviction:settleEvictionBill,
+  evict(){ G.evicted=true; smsClear(); sms('집주인','월세가 두 달치 밀렸습니다.\n계약 해지하겠습니다. 방 정리해 주세요.'); startEviction(); },
+  setTear(v){ G.tear=clamp(v,0,1); updateTearMeter(0); },
   retry(){ if(!G.snap) return false; restoreSnap(); startRound(G.snap.round); return true; },
   state(){ return {scene:G.scene,round:G.round+1,money:G.money,debt:G.debt,loanBalance:G.loanBalance,cleanBooked:G.cleanBooked,trashV:G.trashV,fat:G.fat,tear:G.tear,ultimate:SELF_HIT.charge,enemies:EN.list.length,towers:towers.length,projectiles:projs.length,aiming:AIM.active,bestDay}; },
   spawnType(kind,n=1,o={}){ const out=[]; for(let i=0;i<n;i++) out.push(spawnEnemy(Object.assign({kind,speed:0.17},o))); return out.filter(Boolean); },

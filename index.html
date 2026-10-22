@@ -2624,7 +2624,87 @@ function buildFood(id, full){
     g.add(l);
   }
 }
-  else if(id==='burger'){ if(full){ g.add(mesh(roundedBox(0.17,0.2,0.12,0.02,2),M.paperBag,0,0,0)); const b=burgerMesh(0.75); b.userData.ammoUnit=true; b.position.set(0,0.19,0.01); b.rotation.z=0.25; g.add(b); const b2=burgerMesh(0.75); b2.userData.ammoUnit=true; b2.position.set(-0.05,0.15,-0.02); b2.rotation.z=-0.6; b2.rotation.x=0.4; g.add(b2); } else { const bag=mesh(roundedBox(0.19,0.05,0.14,0.02,2),M.paperBag,0,0,0); bag.rotation.y=-0.4; g.add(bag); g.add(mesh(new THREE.BoxGeometry(0.06,0.004,0.06),M.receipt,0.06,0.003,0.04)); } }
+  else if(id==='burger'){
+    if(full){
+      // An open, handleless kraft delivery bag. The lower front wall keeps the contents readable
+      // from the game camera; four units make the visible stock follow ammo 4 -> 3 -> 2 -> 1.
+      const bag=new THREE.Group();
+      const bottom=mesh(new THREE.BoxGeometry(0.19,0.01,0.13),M.paperBag,0,0.005,0);
+      const front=mesh(new THREE.BoxGeometry(0.20,0.09,0.012),M.paperBag,0,0.045,0.067);
+      const back=mesh(new THREE.BoxGeometry(0.20,0.125,0.012),M.paperBag,0,0.0625,-0.067);
+      const left=mesh(new THREE.BoxGeometry(0.012,0.11,0.14),M.paperBag,-0.094,0.055,0);
+      const right=mesh(new THREE.BoxGeometry(0.012,0.11,0.14),M.paperBag,0.094,0.055,0);
+
+      front.rotation.x=0.05;
+      back.rotation.x=-0.05;
+      left.rotation.z=0.04;
+      right.rotation.z=-0.04;
+      bag.add(bottom,front,back,left,right);
+
+      // Uneven folded rim: enough paper character to stop the bag reading as a rigid box.
+      for(const [x,y,w,r] of [
+        [-0.066,0.093,0.068,-0.05],
+        [0,0.090,0.066,0.035],
+        [0.066,0.094,0.068,-0.025]
+      ]){
+        const lip=mesh(new THREE.BoxGeometry(w,0.011,0.016),M.paperBag,x,y,0.071);
+        lip.rotation.z=r;
+        bag.add(lip);
+      }
+      const backLip=mesh(new THREE.BoxGeometry(0.196,0.011,0.016),M.paperBag,0,0.126,-0.071);
+      backLip.rotation.z=-0.018;
+      bag.add(backLip);
+      g.add(bag);
+
+      // Added in survival order: the centered front burger is the last one left at ammo 1.
+      const slots=[
+        [0,0.077,0.030,0,0.03],
+        [-0.052,0.083,0.005,-0.18,-0.03],
+        [0.052,0.094,-0.012,0.20,0.04],
+        [0,0.105,-0.036,-0.12,-0.02]
+      ];
+
+      for(let i=0;i<slots.length;i++){
+        const [x,y,z,yaw,tilt]=slots[i];
+        const unit=new THREE.Group();
+        unit.name='burgerAmmo'+i;
+        unit.userData.ammoUnit=true;
+        unit.position.set(x,y,z);
+        unit.rotation.y=yaw;
+        unit.rotation.z=tilt;
+
+        // Open low-poly paper sleeve around the lower half, rather than a little rigid box.
+        unit.add(mesh(
+          new THREE.CylinderGeometry(0.038,0.034,0.03,8,1,true),
+          M.receipt,0,0.015,0
+        ));
+
+        let b;
+        if(i<2){
+          // Keep the two most visible burgers recognizable; the rear pair is cheaper.
+          b=burgerMesh(0.55);
+        }else{
+          b=new THREE.Group();
+          b.add(mesh(new THREE.CylinderGeometry(0.034,0.035,0.011,12),M.patty,0,0.0055,0));
+          const cheese=mesh(new THREE.BoxGeometry(0.065,0.004,0.065),M.cheese,0,0.013,0);
+          cheese.rotation.y=0.28;
+          b.add(cheese);
+          b.add(mesh(new THREE.CylinderGeometry(0.036,0.034,0.008,10),M.lettuce,0,0.019,0));
+          const bun=mesh(new THREE.SphereGeometry(0.035,12,7,0,Math.PI*2,0,Math.PI/2),M.bun,0,0.021,0);
+          bun.scale.y=0.7;
+          b.add(bun);
+        }
+        b.position.y=0.008;
+        unit.add(b);
+        g.add(unit);
+      }
+    }else{
+      const bag=mesh(roundedBox(0.19,0.05,0.14,0.02,2),M.paperBag,0,0,0);
+      bag.rotation.y=-0.4;
+      g.add(bag);
+      g.add(mesh(new THREE.BoxGeometry(0.06,0.004,0.06),M.receipt,0.06,0.003,0.04));
+    }
+  }
   else if(id==='pizza'){ const box=mesh(roundedBox(0.34,0.035,0.34,0.01,1),M.box,0,0,0); g.add(box); const lid=mesh(roundedBox(0.34,0.03,0.34,0.01,1),M.box,0,0,0); lid.geometry.translate(0,0,-0.17); lid.position.set(0,0.035,-0.17); lid.rotation.x=-2.3; g.add(lid); const inner=mesh(new THREE.BoxGeometry(0.32,0.004,0.32),M.boxIn,0,0.035,0); g.add(inner);
     if(full){ const pz=new THREE.Group(); pz.position.y=0.04; pz.name='pizza'; g.add(pz); for(let i=0;i<8;i++){ const sl=pizzaSliceMesh(); sl.userData.ammoUnit=true; sl.rotation.y=i*Math.PI/4; sl.name='slice'+i; pz.add(sl); } } else { for(let i=0;i<5;i++){ const c=mesh(new THREE.SphereGeometry(0.006,6,5),M.pizzaBase,rand(-0.1,0.1),0.042,rand(-0.1,0.1)); g.add(c); } } }
   else if(id==='chicken'){ const box=mesh(roundedBox(0.24,0.06,0.18,0.015,1),M.box,0,0,0); g.add(box); const lid=mesh(roundedBox(0.24,0.03,0.18,0.015,1),M.box,0,0,0); lid.geometry.translate(0,0,-0.09); lid.position.set(0,0.06,-0.09); lid.rotation.x=-2.4; g.add(lid); g.add(mesh(new THREE.BoxGeometry(0.22,0.004,0.16),M.boxIn,0,0.06,0));

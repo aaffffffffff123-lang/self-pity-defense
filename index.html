@@ -317,6 +317,8 @@ body.gamePaused #app *,body.gamePaused #app *::before,body.gamePaused #app *::af
 <script type="module">
 import * as THREE from 'three';
 
+const FUSION_TEST=new URLSearchParams(location.search).get('fusiontest')==='1';
+
 /* =========================================================
    CONFIG
    ========================================================= */
@@ -1051,6 +1053,13 @@ function layoutCamera(){
 
 
 function applyCamera(){
+  if(FUSION_TEST){
+    const wide=clamp((camView.w/Math.max(1,camView.h)-0.48)/0.9,0,1);
+    camera.fov=lerp(54,48,wide); setProj(camView.h);
+    camera.position.set(0,lerp(0.58,0.72,wide),lerp(-0.12,0.04,wide));
+    camera.lookAt(0,0.055,-1.55);
+    return;
+  }
   const k=ease(clamp(camMix,0,1)), u=ease(clamp(camUlt,0,1));
   tmpV.lerpVectors(camBase.pos,camUltV.pos,u); tmpV2.lerpVectors(camBase.tgt,camUltV.tgt,u);
   const fov=lerp(camBase.fov,camUltV.fov,u), ph=lerp(camView.play,camView.h,u);
@@ -2198,7 +2207,7 @@ function finishEvolution(g){
     leader.kind='lump'; leader.mass=leader.faces=total; leader.guard=0; leader.baseSpeed=avgBase; leader.speed=avgBase*0.72;
     leader.evolve=null; leader.state='walk'; leader.scale=1; leader.t=0; leader.evolveLock=0.8; leader.hitFlash=1; leader.x=g.x; leader.z=g.z; leader.y=groundY(g.x,g.z);
     for(const e of g.members) if(e!==leader) removeEnemy(e);
-    burstParts(g.x,leader.y+0.08,g.z,12,'#5A405D',0.75,'chunk',0.006); SFX.heuk(0.07);
+    if(!g.demoQuiet) burstParts(g.x,leader.y+0.08,g.z,12,'#5A405D',0.75,'chunk',0.006); SFX.heuk(0.07);
   }
 }
 function updateEnemyEvolution(dt){
@@ -3130,8 +3139,11 @@ function damageEnemy(e,mode,dx,dz,srcX,srcZ){
   }
   if(e.kind==='lump'&&(e.faces||1)>1){
     e.faces--; e.mass=e.faces; e.hitFlash=1;
-    burstParts(e.x,e.y+0.085,e.z,4,'#C59A91',0.7,'chunk',0.005); burstParts(e.x,e.y+0.075,e.z,2,'#4E3A51',0.55,'chunk',0.004);
-    animalTalk(LUMP_HIT_LINES[(Math.floor(e.seed)+e.faces)%LUMP_HIT_LINES.length],{speed:1.28,pitch:480+e.faces*38,formant:1.18,gain:0.018}); SFX.heuk(0.045);
+    if(!e.demoQuiet){
+      burstParts(e.x,e.y+0.085,e.z,4,'#C59A91',0.7,'chunk',0.005); burstParts(e.x,e.y+0.075,e.z,2,'#4E3A51',0.55,'chunk',0.004);
+      animalTalk(LUMP_HIT_LINES[(Math.floor(e.seed)+e.faces)%LUMP_HIT_LINES.length],{speed:1.28,pitch:480+e.faces*38,formant:1.18,gain:0.018});
+    }
+    SFX.heuk(0.045);
     return true;
   }
   killEnemy(e,mode,dx,dz); return true;
@@ -5008,6 +5020,131 @@ function finishAim(ev){
   if(!fireTower(t,manual)){ t.pulse=.5; toast('사거리 안에 없어요',.9); }
 }
 
+
+/* ---------- isolated four-self fusion test (?fusiontest=1) ---------- */
+const FUSION_DEMO={phase:'off',t:0,members:[],group:null,lump:null,cool:0,hitT:0,ui:null};
+function ensureFusionTestUI(){
+  if(FUSION_DEMO.ui) return;
+  document.body.classList.add('fusion-test');
+  const style=document.createElement('style');
+  style.id='fusionTestStyle';
+  style.textContent='body.fusion-test #hud,body.fusion-test #labels,body.fusion-test #bar,body.fusion-test #sms,body.fusion-test #toast,body.fusion-test #cutCaption,body.fusion-test #cutSkip,body.fusion-test #cleanBtn,body.fusion-test #loanWrap,body.fusion-test #ultScr,body.fusion-test #pauseShade,body.fusion-test #sndBtn,body.fusion-test #arcadeFace,body.fusion-test #dangerVignette{display:none!important}#fusionTestTag{position:absolute;z-index:30;left:50%;top:calc(env(safe-area-inset-top) + 10px);transform:translateX(-50%);display:flex;align-items:center;gap:9px;padding:6px 9px 6px 12px;border-radius:999px;background:rgba(30,27,25,.78);color:#fff;font-size:12px;font-weight:800;white-space:nowrap;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.18)}#fusionTestBack{color:#24201e;background:#fff4d6;border-radius:999px;padding:4px 8px;text-decoration:none;pointer-events:auto}#fusionTestHint{position:absolute;z-index:29;left:50%;bottom:calc(env(safe-area-inset-bottom) + 18px);max-width:calc(100vw - 28px);transform:translate(-50%,8px);padding:9px 14px;border-radius:12px;background:rgba(26,23,22,.84);color:#fff;font-size:14px;font-weight:800;text-align:center;white-space:nowrap;opacity:0;transition:opacity .18s,transform .18s;pointer-events:none;text-shadow:0 1px 1px #000}#fusionTestHint.on{opacity:1;transform:translate(-50%,0)}';
+  document.head.appendChild(style);
+  const tag=document.createElement('div'); tag.id='fusionTestTag';
+  const label=document.createElement('span'); label.textContent='합체 테스트';
+  const back=document.createElement('a'); back.id='fusionTestBack'; back.textContent='본게임';
+  const backUrl=new URL(location.href); backUrl.searchParams.delete('fusiontest'); back.href=backUrl.href;
+  tag.append(label,back);
+  const hint=document.createElement('div'); hint.id='fusionTestHint'; hint.setAttribute('aria-live','polite');
+  app.append(tag,hint);
+  FUSION_DEMO.ui={tag,hint};
+}
+function setFusionTestHint(text){
+  const el=FUSION_DEMO.ui&&FUSION_DEMO.ui.hint;
+  if(!el) return;
+  el.textContent=text||'';
+  el.classList.toggle('on',!!text);
+}
+function startFusionTest(){
+  ensureFusionTestUI();
+  stopAllAnimalTalk(true); clearBubbles(true); clearEnemies(); clearProjectiles();
+  PT.list.length=0; PT.im.count=0; zones.length=0;
+  overlayEl.innerHTML=''; hideCutCaption(); showBar(false); smsClear();
+  G.scene='fusionTest'; G.shift=0; G.party=false; G.tear=0; G.invaders=0; G.gnawPulse=0;
+  SFX.setMurmur(0); SFX.enterWet(0,0,0,0,true);
+  const starts=[[-0.34,-1.55],[0.34,-1.55],[0,-1.91],[0,-1.19]];
+  const stops=[[-0.27,-1.55],[0.27,-1.55],[0,-1.82],[0,-1.28]];
+  const members=starts.map((p,i)=>{
+    const q=stops[i], e=spawnEnemy({x:p[0],z:p[1],kind:'compare',state:'wander',mass:1,fatK:0.24});
+    e.speed=e.baseSpeed=0; e.vx=e.vz=0; e.scale=1; e.demoQuiet=true;
+    e.demoFrom={x:p[0],z:p[1]}; e.demoTo={x:q[0],z:q[1]};
+    e.yaw=Math.atan2(q[0]-p[0],q[1]-p[1]);
+    return e;
+  });
+  Object.assign(FUSION_DEMO,{phase:'lead',t:0,members,group:null,lump:null,cool:0,hitT:0});
+  setFusionTestHint('');
+  window.__fusionTest=FUSION_DEMO;
+}
+function finishFusionTestFormation(){
+  const d=FUSION_DEMO, e=d.group&&d.group.leader;
+  if(!e||!e.alive) return;
+  d.lump=e; e.state='demo'; e.speed=e.baseSpeed=0; e.vx=e.vz=0; e.demoQuiet=true;
+  e.scale=0.92/(1.18+0.025*Math.max(1,e.faces||1));
+  d.phase='bloom'; d.t=0;
+}
+function updFusionTest(dt){
+  const d=FUSION_DEMO;
+  d.t+=dt; d.cool=Math.max(0,d.cool-dt);
+  if(d.lump){
+    d.lump.hitFlash=Math.max(0,(d.lump.hitFlash||0)-dt*4);
+    if(d.phase==='formed'||d.phase==='done') d.lump.anim+=dt*0.8;
+  }
+  if(d.phase==='lead'){
+    for(const e of d.members) if(e.alive) e.anim+=dt*2.2;
+    if(d.t>=0.38){ d.phase='approach'; d.t=0; }
+  }else if(d.phase==='approach'){
+    const u=easeOut(clamp(d.t/0.78,0,1));
+    for(const e of d.members){
+      if(!e.alive) continue;
+      e.x=lerp(e.demoFrom.x,e.demoTo.x,u); e.z=lerp(e.demoFrom.z,e.demoTo.z,u);
+      e.y=groundY(e.x,e.z); e.anim+=dt*9;
+    }
+    if(d.t>=0.78){
+      for(const e of d.members){ e.state='demo'; e.vx=e.vz=0; }
+      d.phase='stop'; d.t=0;
+    }
+  }else if(d.phase==='stop'){
+    if(d.t>=0.42){
+      const g=beginEvolution('lump',d.members,d.members[2]);
+      g.pause=0.58; g.T=1.62; g.demoQuiet=true;
+      d.group=g; d.phase='fusing'; d.t=0;
+    }
+  }else if(d.phase==='fusing'){
+    const doneGroups=new Set();
+    for(const e of d.group.members){
+      if(!e.alive||e.state!=='evolve') continue;
+      e.t+=dt; e.evolveLock=Math.max(0,(e.evolveLock||0)-dt);
+      e.hitFlash=Math.max(0,(e.hitFlash||0)-dt*4);
+      updateEvolvingEnemy(e,dt,doneGroups);
+    }
+    for(const g of doneGroups) finishEvolution(g);
+    if(d.group.done) finishFusionTestFormation();
+  }else if(d.phase==='bloom'){
+    const u=clamp(d.t/0.46,0,1), start=0.92/(1.18+0.025*4);
+    d.lump.scale=lerp(start,1.32,easeOut(u))*(1+0.05*Math.sin(Math.PI*u));
+    if(u>=1){
+      d.lump.scale=1.32; d.phase='formed'; d.t=0; d.cool=0.2;
+      setFusionTestHint('덩어리를 눌러 얼굴 하나씩 지우기');
+    }
+  }
+  if(d.lump&&d.hitT>0){
+    d.hitT=Math.max(0,d.hitT-dt);
+    const u=1-d.hitT/0.18;
+    d.lump.scale=1.32*(1-0.08*Math.sin(Math.PI*clamp(u,0,1)));
+  }else if(d.lump&&(d.phase==='formed'||d.phase==='done')){
+    d.lump.scale=1.32;
+  }
+  updParts(dt);
+}
+function fusionTestTap(ev){
+  if(ev.isPrimary===false) return;
+  const d=FUSION_DEMO;
+  if(d.phase==='done'){ ev.preventDefault(); ev.stopPropagation(); startFusionTest(); return; }
+  if(d.phase!=='formed'||d.cool>0||!d.lump||!d.lump.alive) return;
+  projectTo(d.lump.x,d.lump.y+0.11*d.lump.scale,d.lump.z,scr);
+  const hitR=isMobile?92:72;
+  if(scr.z<-1||scr.z>1||Math.hypot(ev.clientX-scr.x,ev.clientY-scr.y)>hitR) return;
+  ev.preventDefault(); ev.stopPropagation(); d.cool=0.22; d.hitT=0.18;
+  damageEnemy(d.lump,'hit',0,1,d.lump.x,d.lump.z+0.2);
+  d.lump.state='demo'; d.lump.scale=1.32;
+  if((d.lump.faces||1)<=1){
+    d.phase='done'; d.t=0;
+    setFusionTestHint('한 얼굴만 남음 · 화면을 눌러 다시 보기');
+  }else{
+    setFusionTestHint((d.lump.faces||1)+'개 남음 · 한 번 더');
+  }
+}
+
 /* ---------- input ---------- */
 const app=$('app'); let drag=null;
 const phoneHitWorld=new V3();
@@ -5022,6 +5159,10 @@ function phonePressed(ev){
 }
 $('cutSkip').addEventListener('click',ev=>{ ev.stopPropagation(); skipCut(); });
 app.addEventListener('pointerdown',ev=>{
+  if(FUSION_TEST){
+    if(ev.target===renderer.domElement){ audioInit(); fusionTestTap(ev); }
+    return;
+  }
   audioInit(); if(ev.target.closest('.box')) return;
   if(SELF_HIT.active) return;
   if(G.scene==='cut') return;
@@ -5046,6 +5187,7 @@ function step(dt){
   if(G.scene==='play'&&(loanOpen||AIM.active)) dt*=0.22;
   G.time+=dt;
   if(G.scene==='play') updPlay(dt);
+  else if(G.scene==='fusionTest') updFusionTest(dt);
   else if(G.scene==='cut'){
   for(const t of towers) t.pulse=Math.max(0,t.pulse-dt*4);
   updParts(dt);
@@ -5122,8 +5264,11 @@ async function boot(){
   buildSquashSprites();
   try{ await Promise.race([Promise.all([document.fonts.load("900 20px 'Noto Sans KR'"),document.fonts.load("20px 'Black Han Sans'","자기연민디펜스")]), new Promise(r=>setTimeout(r,1500))]); }catch(e){}
   setThumbs();
-  for(let i=0;i<4;i++){ const e=spawnEnemy({x:rand(-0.5,0.5),z:rand(-3.0,-1.2),state:'wander',speed:0.12}); }
-  showTitle();
+  if(FUSION_TEST) startFusionTest();
+  else {
+    for(let i=0;i<4;i++){ const e=spawnEnemy({x:rand(-0.5,0.5),z:rand(-3.0,-1.2),state:'wander',speed:0.12}); }
+    showTitle();
+  }
   requestAnimationFrame(t=>{ last=t; requestAnimationFrame(frame); });
 }
 boot();

@@ -347,13 +347,13 @@ const CFG = {
   HEAD_KEEPOUT: 0.42,
 };
 const FOODS = [
-  {id:'kimbap', name:'삼각김밥', price:1500, ammo:8,  fatShot:0.008, cd:1.0,  range:1.1,  foot:0.09, h:0.11},
-  {id:'ramen',  name:'컵라면',   price:1600, ammo:4,  fatShot:0.020, cd:2.2,  range:0.95, foot:0.075, h:0.12, splash:0.2, maxKill:3},
-  {id:'fries',  name:'감자튀김', price:3000, ammo:12, fatShot:0.005, cd:1.0,  range:1.0,  foot:0.08, h:0.13, volley:2},
-  {id:'cola',   name:'콜라',     price:3000, ammo:3,  fatShot:0.018, cd:3.0,  range:0.85, foot:0.07, h:0.3, cone:0.45, killR:0.45, knockR:0.9, maxKill:10},
-  {id:'burger', name:'햄버거',   price:6000, ammo:4,  fatShot:0.022, cd:2.6,  range:1.5,  foot:0.1,  h:0.22, roll:1.6, maxKill:10},
-  {id:'pizza',  name:'피자',     price:20000,ammo:6,  fatShot:0.012, cd:1.1,  range:1.9,  foot:0.19, h:0.075, maxKill:18},
-  {id:'chicken',name:'치킨',     price:25000,ammo:1,  fatShot:0.075, cd:1.0,  range:1.6,  foot:0.16, h:0.14, blast:0.7, knock:1.2, minCrowd:15, grease:8, greaseR:0.27, maxKill:65},
+  {id:'kimbap', name:'삼각김밥', price:1500, ammo:8, fatShot:0.008, cd:1.0, range:0.90, foot:0.09, h:0.11},
+  {id:'ramen',  name:'컵라면',   price:1600, ammo:4, fatShot:0.020, cd:2.2, range:0.80, foot:0.075, h:0.12, splash:0.2, maxKill:3},
+  {id:'fries',  name:'감자튀김', price:3000, ammo:8, fatShot:0.008, cd:1.0, range:0.70, foot:0.08, h:0.13, volley:2},
+  {id:'cola',   name:'콜라',     price:3000, ammo:3, fatShot:0.018, cd:3.0, range:0.70, foot:0.07, h:0.3, cone:0.45, killR:0.45, knockR:0.75, maxKill:10},
+  {id:'burger', name:'햄버거',   price:6000, ammo:4, fatShot:0.022, cd:2.6, range:1.20, foot:0.1, h:0.22, roll:1.40, maxKill:10},
+  {id:'pizza',  name:'피자',     price:20000,ammo:6, fatShot:0.012, cd:1.1, range:1.50, foot:0.19, h:0.075, maxKill:18},
+  {id:'chicken',name:'치킨',     price:25000,ammo:1, fatShot:0.075, cd:1.0, range:1.25, foot:0.16, h:0.14, blast:0.62, knock:1.0, minCrowd:15, grease:8, greaseR:0.27, maxKill:65},
 ];
 const FOOD_BY = Object.fromEntries(FOODS.map(f=>[f.id,f]));
 const CHEAPEST_FOOD = Math.min(...FOODS.map(f=>f.price));
@@ -1775,14 +1775,17 @@ function makeGiant(){
   const zip=mesh(new THREE.TorusGeometry(0.105,0.004,5,24,Math.PI),zipM,0,0.40,-0.066); zip.scale.set(1.25,0.6,1); pack.add(zip);
   pack.add(mesh(new THREE.BoxGeometry(0.012,0.03,0.006),zipM,0.1,0.30,-0.189));
   pack.add(mesh(new THREE.TorusGeometry(0.035,0.009,6,14,Math.PI),packD,0,0.50,-0.07));
-  const STRAP_P=[
-    [.085,.44,-.02,.140],[.105,.53,.04,.085],[.13,.49,.15,.105],
-    [.15,.34,.175,.330],[.19,.20,.10,.420],[.13,.14,-.02,.470]
-  ]; // base x/y/z, then the depth growth needed at that point as the body changes
   const strapParts=[];
   function strapGuide(sd,k){
-    const sx=1+.62*k, sy=1+.025*k, yo=.008*k;
-    return new THREE.CatmullRomCurve3(STRAP_P.map(([x,y,z,dz])=>new V3(sd*x*sx,y*sy+yo,z+.02+dz*k)));
+    const ps=pack.scale, pp=pack.position, sx=1+.54*k;
+    return new THREE.CatmullRomCurve3([
+      new V3(sd*.10*ps.x,pp.y+.46*ps.y,pp.z+.012),
+      new V3(sd*.13*sx,.525+.012*k,-.018-.018*k),
+      new V3(sd*.15*sx,.465+.008*k,.11),
+      new V3(sd*.18*sx,.355,.16),
+      new V3(sd*.215*sx,.265,.10),
+      new V3(sd*.135*ps.x,pp.y+.18*ps.y,pp.z+.018)
+    ]);
   }
   const strapRay=new THREE.Raycaster(), strapQ=new THREE.Quaternion(), strapOrigin=new V3(), strapDir=new V3(), strapLocal=new V3();
   function strapSurfaceZ(p){
@@ -1804,17 +1807,24 @@ function makeGiant(){
     }
   }
   function strapCurve(sd,k){
-    const guide=strapGuide(sd,k), pts=guide.getPoints(90), chest=moobs[sd<0?0:1];
-    // Separate chest meshes create a sharp depth cliff at their silhouette. Route around the outside edge
-    // first, then project to the body; this hugs the shirt instead of either sinking or ballooning forward.
-    for(const p of pts){
-      if(chest.visible){ const dy=(p.y-chest.position.y)/chest.scale.y; if(Math.abs(dy)<1){ const edge=Math.abs(chest.position.x)+chest.scale.x*Math.sqrt(1-dy*dy)+.022; p.x=sd*Math.max(Math.abs(p.x),edge); } }
-      const z=strapSurfaceZ(p); if(Number.isFinite(z)) p.z=z+.038;
+    const pts=strapGuide(sd,k).getPoints(72), chest=moobs[sd<0?0:1];
+    for(let i=0;i<pts.length;i++){
+      const p=pts[i], u=i/(pts.length-1);
+      const w=ease(clamp((u-.08)/.20,0,1))*ease(clamp((.94-u)/.18,0,1));
+      if(chest.visible&&w>0){
+        const dy=(p.y-chest.position.y)/chest.scale.y;
+        if(Math.abs(dy)<1){
+          const edge=Math.abs(chest.position.x)+chest.scale.x*Math.sqrt(1-dy*dy)+.007;
+          p.x=lerp(p.x,sd*Math.max(Math.abs(p.x),edge),w);
+        }
+      }
+      const z=strapSurfaceZ(p);
+      if(Number.isFinite(z)) p.z=lerp(p.z,z+.011,w);
     }
     return new StrapPath(pts);
   }
   for(const sd of [-1,1]){
-    const tube=mesh(new THREE.TubeGeometry(strapCurve(sd,0),128,.018,6,false),strapM,0,0,0); straps.add(tube);
+    const tube=mesh(new THREE.TubeGeometry(strapCurve(sd,0),96,.010,4,false),strapM,0,0,0); straps.add(tube);
     const buckle=mesh(new THREE.BoxGeometry(.03,.02,.01),zipM,sd*.152,.30,.198); buckle.rotation.z=sd*.25; straps.add(buckle);
     strapParts.push({sd,tube,buckle});
   }
@@ -1823,7 +1833,7 @@ function makeGiant(){
     for(const p of strapParts){
       const fitted=strapCurve(p.sd,k);
       const old=p.tube.geometry;
-      p.tube.geometry=new THREE.TubeGeometry(fitted,128,.018,6,false); old.dispose();
+      p.tube.geometry=new THREE.TubeGeometry(fitted,96,.010,4,false); old.dispose();
       p.buckle.position.copy(fitted.getPointAt(.68)); p.buckle.position.z+=.006; p.buckle.scale.set(1,1,1);
     }
   }
@@ -1864,12 +1874,11 @@ function makeGiant(){
     neck.scale.set(1+0.95*k,1-0.28*k1,1+0.95*k);
     for(const [leg,s] of [[legL,-1],[legR,1]]){ leg.position.x=s*(0.098+0.09*k); leg.userData.thigh.scale.set(1+1.1*k,1,0.94*(1+1.1*k)); leg.userData.shin.scale.set(1+0.55*k,1,0.94*(1+0.55*k)); }
     for(const [arm,s] of [[armL,-1],[armR,1]]){ arm.position.x=s*(0.185+0.14*k); arm.userData.upper.scale.set(1.24*(1+1.0*k),1,1.14*(1+1.0*k)); arm.userData.sleeve.scale.set(0.88*(1+0.95*k),1,0.92*(1+0.95*k)); arm.userData.fore.scale.set(1.22*(1+0.62*k),1,1.08*(1+0.62*k)); }
-    // Fit against the standing silhouette even when weight changes while the character is off-screen/lying.
-    // The visual is restored immediately; the backpack is hidden in the lying pose.
+    // Move the backpack first so both strap ends stay attached while weight changes.
     const wasLying=GI.lying; if(wasLying) GI.bellyPose(0);
+    pack.scale.set(1+0.34*k,1+0.06*k,1+0.12*k); pack.position.set(0,0.02*k,-0.148-0.15*k);
     fitStraps(k);
-    if(wasLying) GI.bellyPose(1);
-    pack.scale.set(1+0.34*k,1+0.06*k,1+0.12*k); pack.position.set(0,0.02*k,-0.148-0.15*k); };
+    if(wasLying) GI.bellyPose(1); };
   GI.lie=()=>{ root.visible=true; workGear.visible=false; GI.bellyPose(1); root.rotation.set(-Math.PI/2,0,0); root.position.set(0,0.17,0.735); legL.rotation.set(0,0,0.04+0.08*GI.fat); legR.rotation.set(0,0,-0.04-0.08*GI.fat); kneeL.rotation.set(0,0,0); kneeR.rotation.set(0,0,0); armL.rotation.set(-0.08,0,-(0.24+0.3*Math.min(1.4,GI.fat))); armR.rotation.set(-0.08,0,0.24+0.3*Math.min(1.4,GI.fat)); elbowL.rotation.set(-0.10,0,0.04); elbowR.rotation.set(-0.10,0,-0.04); splay.scale.setScalar(1); splay.visible=true; GI.lying=true; GI.relaxHands(); };
   GI.stand=(x,z,yaw)=>{ GI.bellyPose(0); root.rotation.set(0,yaw,0); root.position.set(x,0.86,z); legL.rotation.set(0,0,0); legR.rotation.set(0,0,0); armL.rotation.set(0.03,0,-(GI.armOut())); armR.rotation.set(0.03,0,GI.armOut()); elbowL.rotation.set(-0.18,0,0.04); elbowR.rotation.set(-0.18,0,-0.04); splay.visible=false; GI.lying=false; GI.relaxHands(); };
   GI.walkPose=(ph,k)=>{ const f=Math.min(1.4,GI.fat), s=Math.sin(ph*0.55),lag=Math.sin(ph*0.55-0.48); const amp=0.30-0.1*Math.min(1,f); legL.rotation.x=s*amp*k; legR.rotation.x=-s*amp*k; legL.rotation.z=0.03*f; legR.rotation.z=-0.03*f; armL.rotation.x=0.03-lag*0.115*k; armR.rotation.x=0.03+lag*0.115*k; elbowL.rotation.x=-0.18+Math.sin(ph*0.55-0.9)*0.025*k; elbowR.rotation.x=-0.18-Math.sin(ph*0.55-0.9)*0.025*k; root.position.y=0.86+Math.abs(s)*(0.007+0.01*f)*k; root.rotation.z=s*0.045*f*k; belly.position.y=0.19-0.01*f-Math.abs(Math.sin(ph*0.55))*0.012*f*k; bellyLow.position.y=0.035-0.115*f-Math.abs(Math.sin(ph*0.55+0.5))*0.016*f*k; };
@@ -2737,12 +2746,12 @@ function fireTower(t,manual=null){
   const aimTarget=aimed?{x:manual.x,y:groundY(manual.x,manual.z),z:manual.z,vx:0,vz:0}:null;
   if(!cands.length&&!aimTarget) return false;
   t.pulse=1;
-  if(f.id==='kimbap'){ let tg=aimTarget,bd=1e9; if(!tg) for(const e of cands){ const d=headDist(e); if(d<bd){ bd=d; tg=e; } } launchStraight('kimbap',p.x,p.y+0.09,p.z,tg,2.8,f.range+0.4); SFX.kimbap(); }
-  else if(f.id==='fries'){ const sorted=aimTarget?[aimTarget]:cands.slice().sort((a,b)=>headDist(a)-headDist(b)); for(let i=0;i<Math.min(f.volley,sorted.length);i++) launchStraight('fry',p.x,p.y+0.12,p.z,sorted[i],3.2,f.range+0.4); if(sorted.length<f.volley){ for(let i=sorted.length;i<f.volley;i++) launchStraight('fry',p.x,p.y+0.12,p.z,sorted[0],3.2,f.range+0.4,rand(-0.35,0.35)); } SFX.fries(); }
+  if(f.id==='kimbap'){ let tg=aimTarget,bd=1e9; if(!tg) for(const e of cands){ const d=headDist(e); if(d<bd){ bd=d; tg=e; } } launchStraight('kimbap',p.x,p.y+0.09,p.z,tg,2.8,f.range+0.30); SFX.kimbap(); }
+  else if(f.id==='fries'){ const sorted=aimTarget?[aimTarget]:cands.slice().sort((a,b)=>headDist(a)-headDist(b)); for(let i=0;i<Math.min(f.volley,sorted.length);i++) launchStraight('fry',p.x,p.y+0.12,p.z,sorted[i],3.2,f.range+0.20); SFX.fries(); }
   else if(f.id==='ramen'){ const best=aimTarget||bestCluster(cands,f.splash).best; launchLob('ramen',p.x,p.y+0.1,p.z,best.x,best.z,0.5,0.35); SFX.ramenFire(); }
   else if(f.id==='cola'){ const close=cands.filter(e=>Math.hypot(e.x-t.x,e.z-t.z)<f.killR); if(!manual&&close.length<(allSpawned()?1:4)){ t.pulse=0; return false; } const best=aimTarget||bestCluster(close.length?close:cands,0.2).best; const dx=best.x-t.x, dz=best.z-t.z, l=Math.hypot(dx,dz)||1; colaSpray(t,dx/l,dz/l); }
   else if(f.id==='burger'){ const line=bestLine(cands,t.x,t.z,f.roll,0.15), dir=aimTarget?[(aimTarget.x-t.x),(aimTarget.z-t.z)]:line.dir; let near=false; for(const e of cands){ if(Math.hypot(e.x-t.x,e.z-t.z)<0.35){ near=true; break; } } if(!manual&&line.n<2&&!near){ t.pulse=0; return false; } const dl=Math.hypot(dir[0],dir[1])||1; const b=burgerMesh(1); b.position.set(p.x,p.y+0.06,p.z); b.rotation.z=Math.PI/2; scene.add(b); projs.push({type:'burger',mesh:b,x:p.x,y:p.y+0.06,z:p.z,dx:dir[0]/dl,dz:dir[1]/dl,dist:0,max:f.roll,spd:1.25,roll:0,hit:new Set()}); SFX.burger(); }
-  else if(f.id==='pizza'){ const line=bestLine(cands,t.x,t.z,f.range,0.16), dir=aimTarget?[(aimTarget.x-t.x),(aimTarget.z-t.z)]:line.dir; let near=false; for(const e of cands){ if(Math.hypot(e.x-t.x,e.z-t.z)<0.35){ near=true; break; } } if(!manual&&line.n<3&&!near){ t.pulse=0; return false; } const dl=Math.hypot(dir[0],dir[1])||1; const sl=pizzaSliceMesh(); sl.position.set(p.x,p.y+0.1,p.z); scene.add(sl); projs.push({type:'pizza',mesh:sl,x:p.x,y:p.y+0.1,z:p.z,dx:dir[0]/dl,dz:dir[1]/dl,dist:0,max:f.range+0.3,spd:2.3,spin:0,hit:new Set()});  SFX.pizza(); }
+  else if(f.id==='pizza'){ const line=bestLine(cands,t.x,t.z,f.range,0.16), dir=aimTarget?[(aimTarget.x-t.x),(aimTarget.z-t.z)]:line.dir; let near=false; for(const e of cands){ if(Math.hypot(e.x-t.x,e.z-t.z)<0.35){ near=true; break; } } if(!manual&&line.n<3&&!near){ t.pulse=0; return false; } const dl=Math.hypot(dir[0],dir[1])||1; const sl=pizzaSliceMesh(); sl.position.set(p.x,p.y+0.1,p.z); scene.add(sl); projs.push({type:'pizza',mesh:sl,x:p.x,y:p.y+0.1,z:p.z,dx:dir[0]/dl,dz:dir[1]/dl,dist:0,max:f.range+0.15,spd:2.3,spin:0,hit:new Set()});  SFX.pizza(); }
   else if(f.id==='chicken'){ if(projs.some(p=>p.type==='chicken')){ t.pulse=0; return false; }
     const cluster=bestCluster(cands,f.blast), best=aimTarget||cluster.best, n=cluster.n; let stuckNear=false; for(const e of cands){ if(e.state==='squat'&&Math.hypot(e.x-t.x,e.z-t.z)<0.4){ stuckNear=true; break; } }
     let need=f.minCrowd; if(allSpawned()){ let alive=0; for(const e of EN.list) if(e.alive&&(e.state==='walk'||e.state==='squat'||e.state==='climb'||e.state==='slip'||e.state==='intro')) alive++; need=Math.min(need,Math.max(1,Math.ceil(alive*0.5))); }
@@ -2847,6 +2856,14 @@ function removeLump(L,stain){ scene.remove(L.g); disposeRetryVisual(L.g,false); 
 function clearLumps(){ for(const L of lumps.slice()) removeLump(L,false); SFX.setBuzz(0); }
 function lumpArea(){ let a=0; for(const L of lumps) a+=Math.PI*L.r*L.r; return a; }
 function lumpAt(x,z,pad){ for(const L of lumps) if(Math.hypot(L.x-x,L.z-z)<L.r+pad) return L; return null; }
+function foodRemnantAt(x,z,pad){
+  if(lumpAt(x,z,pad)) return true;
+  for(const m of trash){
+    if(!m.parent||m.visible===false||m.userData.kind!=='food') continue;
+    if(Math.hypot(m.position.x-x,m.position.z-z)<(m.userData.r||.06)+pad) return true;
+  }
+  return false;
+}
 function flyCount(){ let n=0; for(const L of lumps) n+=L.flies.length; for(const H of rotHosts) n+=H.flies.length; return n; }
 function updLumps(dt){ let i=0;
   // ky: how far the host has sunk since the flies picked their spots (rotting leftovers flatten)
@@ -2875,7 +2892,7 @@ function seedLumps(){ const L=makeLump('pizza',0.5,-2.36,2); L.seed=true; }
    Thrown food (a burger that rolled out, a chicken that landed) dries brown overnight and keeps a fly or two;
    the night after, it sinks into a stain. Empty packaging never rots: today's and yesterday's stay where they
    fell, anything older is bagged on the way out and thrown on the heap in the back-right corner.
-   None of it touches the game: no paths, no placement, no slipping. */
+   Rotten food consumes placement space; empty packaging can still support a new item. Enemy paths stay open. */
 const TRASH_CAP=32, ROT=new THREE.Color(0x5E4934), ROT_DARK=new THREE.Color(0x3A2C1E), ROT_HSL={h:0,s:0,l:0};
 // dry rot, not mold: every colour drifts to a dull brown (lettuce and cheese too), loses its shine and darkens
 function rotColor(out,hex,k){ out.setHex(hex).getHSL(ROT_HSL); const d=((0.08-ROT_HSL.h+1.5)%1)-0.5; out.setHSL((ROT_HSL.h+d*0.8*k+1)%1,ROT_HSL.s*(1-0.55*k),ROT_HSL.l*(1-0.38*k)); return out.lerp(ROT,0.25*k); }
@@ -4799,6 +4816,7 @@ function placeReason(id,x,z,ignore=null){ const f=FOOD_BY[id], r=placementRadius
   const s=placementStaticAt(x,z,r); if(s) return s.why;
   if(segDist(x,z,LEAF.x0,LEAF.z0,LEAF.x1,LEAF.z1)<LEAF.r+r*0.7) return '문 앞엔 못 놔요';
   if(circleRectHit(x,z,r,-0.35,0.12,0.35,ROOM.z1)) return '내 몸 위엔 못 놔요';
+  if(foodRemnantAt(x,z,f.foot*.55)) return '썩은 음식이 남아 있어요';
   for(const t of towers){ if(t!==ignore&&Math.hypot(t.x-x,t.z-z)<(t.food.foot+f.foot)*PLACE_OVERLAP) return '다른 음식이랑 겹쳐요'; }
   return ''; }
 function placeValid(id,x,z,ignore=null){ return !placeReason(id,x,z,ignore); }

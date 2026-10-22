@@ -129,6 +129,11 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 .gameOverBox{position:absolute;left:50%;bottom:calc(var(--sab) + 24px);transform:translateX(-50%);min-width:0;padding:9px 10px;border-radius:17px;white-space:nowrap}
 .gameOverBox .btn{font-size:14px;min-height:44px;padding:9px 14px;border-radius:11px;margin:2px;display:inline-flex;align-items:center}
 .gameOverRec{font-size:12px;font-weight:800;opacity:.7;margin:1px 4px 5px}
+.taxiBox{position:absolute;left:50%;bottom:calc(var(--sab) + 20px);transform:translateX(-50%);width:min(calc(100vw - 24px),350px);min-width:0;padding:16px 14px;border-radius:18px}
+.taxiBox .st{font-size:17px;margin:0 0 8px}
+.taxiBox p{font-size:13px;margin:0 0 10px;opacity:.8}
+.taxiBox button.btn{border:0;font-family:inherit;font-size:14px;min-height:44px;padding:10px 14px;white-space:normal}
+.taxiBox button.alt{border:2px solid var(--ink)}
 #cutSkip{position:absolute;right:calc(var(--sar) + 14px);bottom:calc(var(--sab) + 16px);z-index:15;min-height:44px;border:0;border-radius:999px;padding:10px 14px;background:rgba(255,255,255,.78);color:var(--ink);font:700 12px/1 'Noto Sans KR',sans-serif;box-shadow:0 2px 0 rgba(90,60,0,.12);opacity:0;pointer-events:none;transform:translateY(8px);transition:opacity .2s,transform .2s;touch-action:manipulation}
 #cutSkip.on{opacity:.82;pointer-events:auto;transform:none}
 #cutSkip:active{transform:scale(.96)}
@@ -330,6 +335,7 @@ const CFG = {
   WAGE: 113520, HOUR_NIGHT: 15480, WEEK: 5, WEEKLY_PAY: 82560, MONTH: 10,
   RENT: 450000, DEPOSIT: 2000000, RENT_DAY: 0, PHONE_BILL: 56870, PHONE_DAY: 3, UTIL: [36000,52000], UTIL_DAY: 7, SAVE: 20000,
   TAXI: [15000,29000],
+  SLEEP: { WORK_STREAK:5, OVEREAT:0.06 },
   // Nothing is ever taken out: a day after it's emptied, packaging goes on the heaps along the walls (a pizza or
   // chicken box counts for more). The fuller the room, the more selves come (few at first, steeply more as it fills,
   // twice as many when it's full), the extra ones crawling out of the heaps. A crew clears it all for 8만 + 21만·f + 66만·f² (8만 a little, 35만 half full, 95만 full).
@@ -2146,7 +2152,7 @@ function kindForDay(day,r=Math.random()){
 function spawnEnemy(opts){
   if(EN.list.length>=EN.max) return null;
   opts=opts||{};
-  const kind=opts.kind||((typeof G!=='undefined'&&G.scene==='play')?kindForDay(G.shift+1):'pity');
+  const kind=opts.kind||((typeof G!=='undefined'&&G.scene==='play')?kindForDay(G.round+1):'pity');
   const speed=(opts.speed||0.17)*rand(0.86,1.14), mass=Math.max(1,opts.mass||1);
   // Use most of the doorway without spawning through the inward-swinging door slab.
   const e={ id:enemyId++, x:opts.x!==undefined?opts.x:rand(-0.14,0.36), y:0, z:opts.z!==undefined?opts.z:ROOM.z0+rand(0.03,0.2), vx:0, vz:0.1, yaw:0, state:opts.state||'walk', anim:rand(0,6), seed:rand(0,100), speed, baseSpeed:speed, sx:0, sz:0,
@@ -2210,7 +2216,7 @@ function finishEvolution(g){
   }
 }
 function updateEnemyEvolution(dt){
-  EVOLVE.tick-=dt; const day=G.shift+1; if(day<5||EVOLVE.tick>0) return; EVOLVE.tick=0.15; shBuild();
+  EVOLVE.tick-=dt; const day=G.round+1; if(day<5||EVOLVE.tick>0) return; EVOLVE.tick=0.15; shBuild();
   if(day>=9){
     for(const e of EN.list.slice()){
       if(!evolutionEligible(e)) continue;
@@ -3521,7 +3527,7 @@ selfHitBtn.addEventListener('pointerdown',ev=>{ ev.preventDefault(); ev.stopProp
    GAME STATE
    ========================================================= */
 const G={ scene:'title', round:0, shift:0, money:CFG.START_MONEY, kills:0, fat:0, eaten:0, tear:0, invaders:0, gnawPulse:0, t:0, spawns:[], spawnIdx:0, cues:[], cueIdx:0, extra:[], kickAt:0, plan:null, stallT:0, snap:null, time:0, gone:0, party:false, tearCarry:0, stain:0, debt:0, loanBalance:0, weekMiss:0, monthMiss:0, monthFood:0, monthBuys:0, monthTaxi:0, monthTaxiN:0, monthClean:0, rentOwed:0, billOwed:0, evictDue:-1, evicted:false, saveN:0, saveMiss:0, lastStay:false, lastMode:'', adDay:-1, remindDay:-1, firstRentShown:false,
-  trashV:0, cleanBooked:0, propsGone:false, trashAdSent:false, trashWarnSent:false };
+  workStreak:0, pendingLoanSwarm:0, trashV:0, cleanBooked:0, propsGone:false, trashAdSent:false, trashWarnSent:false };
 let hudDirty=true, CUT=null, CRY=null, FALL=null;
 /* ---------- entrances ---------- */
 // door: from day 1 · bathroom: from day 3 (the toilet flushes, then they shoot out of it) · hallway window: from day 6 (a siege ladder)
@@ -3661,7 +3667,7 @@ function disposeSnapVisuals(s){
 function snapshot(){
   const old=G.snap;
   G.snap={
-    money:G.money,kills:G.kills,fat:G.fat,eaten:G.eaten,round:G.round,shift:G.shift,
+    money:G.money,kills:G.kills,fat:G.fat,eaten:G.eaten,round:G.round,shift:G.shift,workStreak:G.workStreak,pendingLoanSwarm:G.pendingLoanSwarm,
     tear:G.tear,stain:G.stain,debt:G.debt,loanBalance:G.loanBalance,
     weekMiss:G.weekMiss,monthMiss:G.monthMiss,monthFood:G.monthFood,monthBuys:G.monthBuys,monthTaxi:G.monthTaxi,monthTaxiN:G.monthTaxiN,monthClean:G.monthClean,rentOwed:G.rentOwed,billOwed:G.billOwed,evictDue:G.evictDue,saveN:G.saveN,saveMiss:G.saveMiss,lastStay:G.lastStay,
     trashV:G.trashV,cleanBooked:G.cleanBooked,propsGone:G.propsGone,
@@ -3681,12 +3687,13 @@ function snapshot(){
 function startRound(r){
   if(typeof AIM!=='undefined') cancelAim();
   resetCryDrops();
-  G.round=r; const stage=G.shift, b=buildSpawns(stage); addTrashSpawns(b); G.spawns=b.list; G.cues=b.cues; G.cueIdx=0; G.extra=[]; G.kickAt=0; G.plan=b.plan; G.spawnIdx=0; G.t=0;
+  G.round=r; const stage=G.round, b=buildSpawns(stage); addTrashSpawns(b); G.spawns=b.list; G.cues=b.cues; G.cueIdx=0; G.extra=[]; G.kickAt=0; G.plan=b.plan; G.spawnIdx=0; G.t=0;
+  for(let i=0;i<G.pendingLoanSwarm;i++) G.extra.push({t:1.2+i*0.85,ent:'phone'});
   G.party=(stage+1===CFG.PARTY_DAY); setEntrancesForDay(stage+1);
   G.eaten=0; G.tear=G.tearCarry||0; G.invaders=0; G.gnawPulse=0; G.stallT=0; G.scene='play'; setStain(G.stain);
   resetTearMeterUI();
   resetDanger();
-  doorRattle=0; SFX.setMurmur(0); clearEnemies(); resetLineBags(); resetSelfHitForRound(); snapshot(); hudDirty=true; showBar(true);
+  doorRattle=0; SFX.setMurmur(0); clearEnemies(); resetLineBags(); resetSelfHitForRound(); snapshot(); G.pendingLoanSwarm=0; hudDirty=true; showBar(true);
   if(G.rentOwed>0&&G.evictDue>=0&&G.evictDue-G.round===1) sms('집주인','월세 미납액 '+won(G.rentOwed)+'\n내일까지 입금해 주세요.');
   if(G.round%CFG.MONTH===(CFG.RENT_DAY+CFG.MONTH-3)%CFG.MONTH&&G.remindDay!==G.round){ G.remindDay=G.round; sms('은행',WEB+'3일 뒤 월세 '+won(CFG.RENT)+' 자동이체 예정입니다.'); }
   const tf=trashFill();
@@ -3697,11 +3704,11 @@ function fatAfterRound(fat,eaten){ return Math.min(1.4,fat+eaten); }
 function newRun(){
   if(typeof AIM!=='undefined') cancelAim();
   if(typeof DANGER!=='undefined') resetDanger();
-  FALL=null;
+  FALL=null; CUT=null; CRY=null; HUSH=null;
   resetCommuteVisual(); G.party=false; G.tearCarry=0; G.stain=0; G.debt=0; G.loanBalance=0; setEntrancesForDay(1); clearLumps();
   G.weekMiss=0; G.monthMiss=0; G.monthFood=0; G.monthBuys=0; G.monthTaxi=0; G.monthTaxiN=0; G.monthClean=0; G.rentOwed=0; G.billOwed=0; G.evictDue=-1; G.evicted=false; G.saveN=0; G.saveMiss=0; G.lastStay=false;
   G.trashV=0; G.cleanBooked=0; G.propsGone=false; G.trashAdSent=false; G.trashWarnSent=false; emptyRoom(false); setPropsVisible(true); G.lastMode=''; G.adDay=-1; G.remindDay=-1; smsClear();
-  G.money=CFG.START_MONEY; G.kills=0; G.fat=0; G.eaten=0; G.round=0; G.shift=0; G.tear=0; G.invaders=0; G.gnawPulse=0; G.firstRentShown=false;
+  G.money=CFG.START_MONEY; G.kills=0; G.fat=0; G.eaten=0; G.round=0; G.shift=0; G.workStreak=0; G.pendingLoanSwarm=0; G.tear=0; G.invaders=0; G.gnawPulse=0; G.firstRentShown=false;
   resetSelfHitForRound();
   GI.setFat(0); updHeadW(); GI.lie();
   for(const t of towers.slice()) removeTower(t);
@@ -3714,12 +3721,13 @@ function newRun(){
 function restoreSnap(){
   if(typeof AIM!=='undefined') cancelAim();
   if(typeof DANGER!=='undefined') resetDanger();
-  FALL=null;
+  FALL=null; CUT=null; CRY=null; HUSH=null;
   resetCommuteVisual(); setSelected(null); hideGhost(); GI.lie(); camMix=0;
   const s=G.snap;
 
   G.tearCarry=s.tear;
   G.shift=s.shift||0;
+  G.workStreak=s.workStreak||0; G.pendingLoanSwarm=s.pendingLoanSwarm||0;
   G.stain=s.stain;
   G.debt=s.debt;
   G.loanBalance=s.loanBalance||0;
@@ -3795,12 +3803,13 @@ function restoreSnap(){
 }
 function endRound(forcedMode){
   const mode=forcedMode||nightOutcome();
-  G.tearCarry=mode==='stay'?0:Math.min(0.6,G.tear*CFG.TEAR_CARRY); G.stain+=G.tear; setStain(G.stain); drag=null; cancelAim(); G.scene='cut';
+  G.tearCarry=Math.min(0.6,G.tear*CFG.TEAR_CARRY); G.stain+=G.tear; setStain(G.stain); drag=null; cancelAim(); G.scene='cut';
   const fat1=fatAfterRound(G.fat,G.eaten);
   const ph0=rand(0,Math.PI/0.55);   // where the steps fall changes from day to day, so the prints fill in a path
   const fare=mode==='late'?Math.round(rand(CFG.TAXI[0],CFG.TAXI[1])/100)*100:0; G.lastStay=mode==='stay'; G.lastMode=mode;
-  CUT={t:0,walkPh:ph0,counted:false,paid:false,debtFloat:0,debtFloatAt:Infinity,debtShown:false,doorOpened:false,doorClosed:false,reopened:false,closed2:false,allowSkip:G.round>0,fat1,T:cutTimes(G.fat,fat1),lastStep:Math.floor(ph0*0.55/Math.PI),ink:0,out:true,outDone:false,backDone:false,
-    mode, stayReason:mode==='stay'?'출근하기 싫어졌다.':'', T0:mode==='late'?1.6:0, h0:0, fare, taxi:mode==='late'&&G.money>=fare, clockIn:'00:'+Math.floor(rand(41,59)), alarm:false, S:{tryEnd:1.7,nightEnd:6.7,end:7.8}};
+  const tired=clamp((G.workStreak-2)/3,0,1);
+  CUT={t:0,walkPh:ph0,counted:false,paid:false,debtFloat:0,debtFloatAt:Infinity,debtShown:false,doorOpened:false,doorClosed:false,reopened:false,closed2:false,allowSkip:G.round>0,fat1,tired,T:cutTimes(G.fat,fat1,tired),lastStep:Math.floor(ph0*0.55/Math.PI),ink:0,out:true,outDone:false,backDone:false,
+    mode, overslept:mode==='late',awaitTaxi:false,stayReason:mode==='stay'?'택시비를 마련하지 못했다.':'', T0:mode==='late'?3.2:0, h0:0, fare, taxi:false, clockIn:'00:'+Math.floor(rand(41,59)), alarm:false, S:{tryEnd:1.7,nightEnd:6.7,end:7.8}};
   const sk=$('cutSkip'); if(sk){ sk.textContent=mode==='stay'?'건너뛰기 ›':'출근 건너뛰기 ›'; sk.setAttribute('aria-label',mode==='stay'?'장면 건너뛰기':'출근 장면 건너뛰기'); }
   showBar(false); SFX.setMurmur(0); hideGhost(); updateSelfHitBtn();
 }
@@ -4012,13 +4021,15 @@ function phoneLit(){ return G.scene==='play'&&G.money<CFG.BROKE; }
 function loanAvailable(){ return Math.max(0,CFG.LOAN_LIMIT-G.loanBalance); }
 function loanEnemyCount(amount){ return Math.min(24,(CFG.LOAN_SWARM[amount]||3)+Math.floor(G.loanBalance/500000)); }
 function takeLoan(amount){
-  if(!phoneLit()||!CFG.LOAN_OPTIONS.includes(amount)) return false;
+  const commute=G.scene==='cut'&&CUT&&CUT.awaitTaxi;
+  if((commute?amount!==MIN_LOAN_DRAW:!phoneLit())||!CFG.LOAN_OPTIONS.includes(amount)) return false;
   if(amount>loanAvailable()){ SFX.denied(); toast('대출 한도가 부족합니다.',2); return false; }
   const n=loanEnemyCount(amount);
   G.money+=amount; G.loanBalance+=amount; G.debt+=amount;
   markHint('loan'); setLoanOpen(false);
   sms('은행',WEB+'입금 '+won(amount)+' 비상금대출\n다음 날부터 통장 잔액으로 자동 상환 · 잔액 '+won(G.loanBalance));
-  for(let i=0;i<n;i++) G.extra.push({t:G.t+1.2+i*0.85,ent:'phone'});
+  if(commute) G.pendingLoanSwarm+=n;
+  else for(let i=0;i<n;i++) G.extra.push({t:G.t+1.2+i*0.85,ent:'phone'});
   SFX.cash(); floatMoney('+'+won(amount),'plus'); PHONEG.flash=1; hudDirty=true;
   return true;
 }
@@ -4040,16 +4051,13 @@ function updPhone(dt){
   const buzz=(lit&&canBorrow&&phoneBuzzT>1.3)||ring; PHONEG.g.rotation.y=-0.42+(buzz?Math.sin(G.time*70)*0.06:0); PHONEG.g.position.x=PHONE.x+(buzz?Math.sin(G.time*83)*0.004:0);
 }
 /* ---------- cutscene (출근) ---------- */
-// What the night will be on a completed day: out to work, or overslept and into a taxi. Missing a shift is not random;
-// it happens only after the tears overflow and the player abandons that night's work.
+// Only consecutive work AND today's actual food consumption can cause oversleeping.
+// Tears end the run; an absence can only follow a successful defense and a missed shuttle.
 function messLevel(){ let rot=0; for(const m of trash) if(m.userData.kind==='food') rot++; return clamp(lumpArea()/LUMP_CAP,0,1)*0.4+clamp(rot/10,0,1)*0.25+trashFill()*0.35; }
-function nightOutcome(){ const day=G.shift+1; if(day<=1) return 'work';
-  const mess=messLevel(), f=clamp(G.fat/1.4,0,1), s=clamp(G.stain/2.2,0,1);
-  const pLate=clamp(0.09+0.06*f+0.05*s+0.04*mess,0,0.28);
-  return Math.random()<pLate?'late':'work'; }
+function nightOutcome(){ return G.workStreak>=CFG.SLEEP.WORK_STREAK&&G.eaten>=CFG.SLEEP.OVEREAT?'late':'work'; }
 // the night itself, whether he is at work or still in bed: the day ticks over, the room dims, food goes off, the clock
 // and the window run on to morning
-function nightStart(c){ if(c.nightOn) return; c.nightOn=true; G.round++; if(c.mode!=='stay'){ G.shift++; recordBestShift(G.shift); } hudDirty=true; G.fat=c.fat1; GI.setFat(G.fat); updHeadW(); }
+function nightStart(c){ if(c.nightOn) return; c.nightOn=true; G.round++; if(c.overslept||c.mode==='stay') G.workStreak=0; if(c.mode!=='stay'){ G.shift++; G.workStreak++; recordBestShift(G.shift); } hudDirty=true; G.fat=c.fat1; GI.setFat(G.fat); updHeadW(); }
 function nightTick(c,k,dt){
   nightStart(c);
   const kw=clamp((k-0.1)/0.8,0,1), hours=c.h0+(9-c.h0)*ease(kw), spoilK=ease(clamp((k-0.12)/0.68,0,1));
@@ -4061,6 +4069,25 @@ function nightTick(c,k,dt){
   updCameo(c,k,dt);
 }
 function payTaxi(c){ if(!c.taxi||c.taxiPaid) return; c.taxiPaid=true; const f=Math.min(G.money,c.fare); G.money-=f; G.monthTaxi+=f; G.monthTaxiN++; hudDirty=true; floatMoney('-'+won(f),'minus'); SFX.broke(); sms('카드',WEB+'승인 '+won(f)+' 택시\n잔액 '+won(G.money)); }
+function resolveTaxi(c,borrow){
+  if(CUT!==c||!c.awaitTaxi||gamePaused) return;
+  if(borrow&&!takeLoan(MIN_LOAN_DRAW)) return;
+  c.awaitTaxi=false; overlayEl.innerHTML='';
+  if(borrow&&G.money>=c.fare){ c.taxi=true; c.t=c.T0; payTaxi(c); }
+  else { c.mode='stay'; c.stayReason='택시비를 마련하지 못했다.'; c.t=0; c.alarm=false; G.lastStay=true; G.lastMode='stay'; $('cutSkip').textContent='건너뛰기 ›'; $('cutSkip').setAttribute('aria-label','장면 건너뛰기'); GI.lie(); }
+  SFX.click();
+}
+function wakeForCommute(c){
+  c.woke=true; c.alarm=false; GI.lie(); SFX.huff(G.fat+0.3);
+  showCutCaption('셔틀을 놓쳤다.',2.6);
+  if(G.money>=c.fare){ c.taxi=true; payTaxi(c); return true; }
+  c.awaitTaxi=true; setCutSkip(false);
+  const canBorrow=loanAvailable()>=MIN_LOAN_DRAW;
+  overlayEl.innerHTML=`<div class="box taxiBox" role="dialog" aria-modal="true" aria-label="출근 교통비"><div class="st">셔틀을 놓쳤다.</div><p>택시 ${won(c.fare)} · 잔액 ${won(G.money)}</p>${canBorrow?'<button class="btn" id="btnTaxiLoan" type="button">3만 원 대출 · 택시 타기</button>':'<p>대출 한도가 부족하다.</p>'}<button class="btn alt" id="btnMissShift" type="button">${canBorrow?'출근 포기':'누워 있기'}</button></div>`;
+  if(canBorrow) $('btnTaxiLoan').addEventListener('pointerdown',ev=>{ ev.preventDefault(); ev.stopPropagation(); audioInit(); resolveTaxi(c,true); });
+  $('btnMissShift').addEventListener('pointerdown',ev=>{ ev.preventDefault(); ev.stopPropagation(); audioInit(); resolveTaxi(c,false); });
+  return false;
+}
 // Morning: what the night paid, then what the month takes. What's owed comes out of the account first, all of it
 // that's there: rent arrears, then unpaid bills, then the phone loan. A short rent becomes arrears immediately;
 // three mornings remain to clear it before the lease ends.
@@ -4152,7 +4179,7 @@ function updCutStay(dt){
   settleMorning();
   if(t>=S.end) finishCut();
 }
-function cutTimes(k0,k1){ const sq0=k0>0.55, sq1=k1>0.55; const rise=0.85+0.95*Math.min(1,k0), turn=rise+0.3+0.25*Math.min(1,k0), walkA=turn+1.85*(1+0.45*k0), doorIn=walkA+(sq0?1.25:0.3), exit=doorIn+0.45, back=exit+5.0, retA=back+0.5, retB=retA+(sq1?1.25:0.3), inEnd=retB+1.85*(1+0.45*k1), lieEnd=inEnd+0.75+0.5*Math.min(1,k1);
+function cutTimes(k0,k1,tired=0){ const sq0=k0>0.55, sq1=k1>0.55; const rise=0.85+0.95*Math.min(1,k0)+0.3*tired, turn=rise+0.3+0.25*Math.min(1,k0), walkA=turn+1.85*(1+0.45*k0), doorIn=walkA+(sq0?1.25:0.3), exit=doorIn+0.45, back=exit+5.0, retA=back+0.5, retB=retA+(sq1?1.25:0.3), inEnd=retB+1.85*(1+0.45*k1), lieEnd=inEnd+0.75+0.5*Math.min(1,k1)+0.25*tired;
   return {rise,turn,walkA,doorIn,exit,back,retA,retB,inEnd,lieEnd,sq0,sq1}; }
 function resetCommuteVisual(){
   const fade=$('dayFade'); if(fade) fade.style.opacity=0;
@@ -4181,21 +4208,26 @@ function showCutDebt(c){
 
 function updCut(dt){
   const c=CUT; if(c.mode==='stay') return updCutStay(dt);
+  if(c.awaitTaxi){ setCutSkip(false); return; }
   c.t+=dt; const t=c.t-c.T0, T=c.T, k0=G.fat, lieP=new V3(0,0.17,0.735), standP=new V3(0,0.86,0.91);
-  setCutSkip(c.allowSkip&&c.t>=1.2);
+  setCutSkip(c.allowSkip&&c.t>=1.2&&(!c.overslept||c.woke));
   if(c.paid&&!c.debtShown&&c.debtFloat>0&&c.t>=c.debtFloatAt) showCutDebt(c);
-  // overslept: still asleep while the clock runs on past eleven, then up in a hurry
+  // He reacts late, silences the alarm, and sinks back down before the next ring wakes him.
   if(t<0){ const u=clamp(c.t/c.T0,0,1); camMix=u; c.h0=0.7*u; clockHour.rotation.z=-(23+c.h0)*Math.PI/6; clockMinute.rotation.z=-c.h0*Math.PI*2;
-    c.alarm=true; c.ring=(c.ring||0)-dt; if(c.ring<=0){ c.ring=0.62; SFX.phoneBuzz(); } return; }
-  if(c.T0>0&&!c.woke){ c.woke=true; c.alarm=false; SFX.huff(k0+0.3); }
+    const reach=Math.sin(clamp((c.t-0.65)/1.4,0,1)*Math.PI);
+    GI.root.rotation.y=reach*0.035; GI.armR.rotation.x=-0.08-reach*0.18; GI.elbowR.rotation.x=-0.10-reach*0.28;
+    c.alarm=c.t<1.35||c.t>2.45;
+    if(c.alarm){ c.ring=(c.ring||0)-dt; if(c.ring<=0){ c.ring=0.62; SFX.phoneBuzz(); } }
+    return; }
+  if(c.T0>0&&!c.woke&&!wakeForCommute(c)) return;
   camMix=t<T.rise?Math.max(c.T0>0?1:0,clamp(t/T.rise,0,1)):t>T.inEnd?1-clamp((t-T.inEnd)/(T.lieEnd-T.inEnd),0,1):1;
   const walkStep=kf=>{ const si=Math.floor(c.walkPh*0.55/Math.PI); if(si!==c.lastStep){ c.lastStep=si; SFX.heavyStep(kf); commuteStep(c); } };
   if(t<T.rise){
     GI.splay.visible=false;
     // a heavy body rocks a few times before it manages to get up
-    const u=t/T.rise, rock=Math.min(1,k0)>0.3?0.5:0;
-    if(u<rock){ const r=u/rock; GI.root.rotation.set(-Math.PI/2,Math.sin(r*Math.PI*3)*0.32*Math.min(1,k0),0); GI.root.position.copy(lieP); if(!c.huffed){ c.huffed=true; SFX.huff(k0); } }
-    else { const k=easeOut((u-rock)/(1-rock)), lieArm=0.24+0.3*Math.min(1.4,k0); GI.root.rotation.set(lerp(-Math.PI/2,0,k),0,0); GI.root.position.lerpVectors(lieP,standP,k); GI.bellyPose(1-k);
+    const u=t/T.rise, tired=c.tired||0, rock=Math.max(Math.min(1,k0)>0.3?0.5:0,0.35*tired);
+    if(u<rock){ const r=u/rock; GI.root.rotation.set(-Math.PI/2,Math.sin(r*Math.PI*3)*0.32*Math.max(Math.min(1,k0),0.35*tired),0); GI.root.position.copy(lieP); if(!c.huffed){ c.huffed=true; SFX.huff(Math.max(k0,tired*0.4)); } }
+    else { const q=(u-rock)/(1-rock), pause=tired*0.15, p=q<0.38?q:q<0.38+pause?0.38:0.38+(q-0.38-pause)*0.62/(0.62-pause), k=easeOut(p), lieArm=0.24+0.3*Math.min(1.4,k0); GI.root.rotation.set(lerp(-Math.PI/2,0,k),0,0); GI.root.position.lerpVectors(lieP,standP,k); GI.bellyPose(1-k);
       GI.legL.rotation.set(0,0,(0.04+0.08*k0)*(1-k)); GI.legR.rotation.set(0,0,-(0.04+0.08*k0)*(1-k)); GI.armL.rotation.set(lerp(-0.08,0.03,k),0,-lerp(lieArm,GI.armOut(),k)); GI.armR.rotation.set(lerp(-0.08,0.03,k),0,lerp(lieArm,GI.armOut(),k)); GI.elbowL.rotation.set(lerp(-0.10,-0.18,k),0,0.04); GI.elbowR.rotation.set(lerp(-0.10,-0.18,k),0,-0.04);
       GI.lying=false; GI.workGear.visible=k>0.98; }
   } else if(t<T.turn){
@@ -4230,7 +4262,7 @@ function updCut(dt){
     c.walkPh+=dt*12/(1+0.35*k1); GI.walkPose(c.walkPh,kk<0.97?0.8:0); GI.root.rotation.z+=wob; walkStep(k1);
     if(kk>=0.97) c.backDone=true;
   } else if(t<T.lieEnd){
-    const k1=G.fat, k=easeOut((t-T.inEnd)/(T.lieEnd-T.inEnd)), lieArm=0.24+0.3*Math.min(1.4,k1); GI.workGear.visible=false;
+    const k1=G.fat, u=(t-T.inEnd)/(T.lieEnd-T.inEnd), k=lerp(easeOut(u),easeIn(u),0.7*(c.tired||0)), lieArm=0.24+0.3*Math.min(1.4,k1); GI.workGear.visible=false;
     GI.root.rotation.set(lerp(0,-Math.PI/2,k),0,0); GI.root.position.lerpVectors(standP,lieP,k); GI.bellyPose(k);
     GI.legL.rotation.set(0,0,(0.04+0.08*k1)*k); GI.legR.rotation.set(0,0,-(0.04+0.08*k1)*k); GI.armL.rotation.set(lerp(0.03,-0.08,k),0,-lerp(GI.armOut(),lieArm,k)); GI.armR.rotation.set(lerp(0.03,-0.08,k),0,lerp(GI.armOut(),lieArm,k)); GI.elbowL.rotation.set(lerp(-0.18,-0.10,k),0,0.04); GI.elbowR.rotation.set(lerp(-0.18,-0.10,k),0,-0.04); const hairK=clamp((k-0.965)/0.035,0,1); GI.splay.visible=hairK>0; GI.splay.scale.setScalar(Math.max(0.001,easeOut(hairK)));
     if(k>0.9&&!c.flop){ c.flop=true; GI.jig=1; SFX.heavyStep(k1+0.3); }
@@ -4375,6 +4407,8 @@ function updBankruptcyMontage(dt){
 function finishCut(skipped=false){
   const c=CUT;
   if(!c) return;
+  if(c.overslept&&!c.woke){ c.t=c.T0; if(!wakeForCommute(c)) return; }
+  if(c.awaitTaxi) return;
   if(skipped&&c.mode!=='stay') stampCommuteTrail(c);
 
   if(!c.spoilDone){
@@ -4414,18 +4448,19 @@ function finishCut(skipped=false){
 }
 
 function skipCut(){
-  if(!CUT||!CUT.allowSkip||CUT.t<1.2) return;
+  if(!CUT||!CUT.allowSkip||CUT.t<1.2||CUT.awaitTaxi||(CUT.overslept&&!CUT.woke)) return;
   stopTransientSFX();
   finishCut(true);
 }
 
 function setCutSkip(on){ const b=$('cutSkip'); if(!b) return; on=!!on; b.classList.toggle('on',on); b.disabled=!on; b.tabIndex=on?0:-1; b.setAttribute('aria-hidden',String(!on)); }
 
-/* ---------- cry: lose one shift, not the run ---------- */
-function finishCryAsAbsence(c){
+/* ---------- cry: the run ends where he lies ---------- */
+function finishCryRun(c){
   jjiBubble.style.display='none'; tearBubble.style.display='none';
-  clearEnemies(); clearProjectiles(); zones.length=0; PT.list.length=0; resetCryDrops(); c.mini=null; CRY=null;
-  endRound('stay');
+  CRY=null; stopAllAnimalTalk(true); SFX.enterWet(0,0,0,0,true);
+  if(G.rentOwed>0){ smsClear(); sms('집주인','월세 미납액 '+won(G.rentOwed)+'\n입금 확인이 안 됩니다. 연락 부탁드립니다.',{sticky:true}); }
+  showGameOver({keepSms:true,noWorkSms:true});
 }
 function updCry(dt){
   const c=CRY; c.t+=dt; const t=c.t;
@@ -4438,7 +4473,7 @@ function updCry(dt){
     else { if(!c.dropped[i]){ c.dropped[i]=true; SFX.plop(); B.mesh.visible=false; wetSpots[i].visible=true; } const k=clamp((t-1.9)/1.1,0,1); wetSpots[i].scale.setScalar(0.001+easeOut(k)*0.07); }
   }
   updParts(dt); updTearBubble(t); updMini(c,t,dt);
-  if(t>=6.25) finishCryAsAbsence(c);
+  if(t>=6.25) finishCryRun(c);
 }
 function surfPointW(d){ return new V3(HEADW.c.x+d.x*HEADW.r.x*1.01,HEADW.c.y+d.y*HEADW.r.y*1.01,HEADW.c.z+d.z*HEADW.r.z*1.01); }
 

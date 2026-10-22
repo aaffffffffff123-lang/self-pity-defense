@@ -5114,7 +5114,7 @@ function updFusionTest(dt){
     d.lump.scale=lerp(start,1.32,easeOut(u))*(1+0.05*Math.sin(Math.PI*u));
     if(u>=1){
       d.lump.scale=1.32; d.phase='formed'; d.t=0; d.cool=0.2;
-      setFusionTestHint('덩어리를 눌러 얼굴 하나씩 지우기');
+      setFusionTestHint('덩어리를 눌러 얼굴 하나씩 줄이기');
     }
   }
   if(d.lump&&d.hitT>0){
@@ -5129,7 +5129,7 @@ function updFusionTest(dt){
 function fusionTestTap(ev){
   if(ev.isPrimary===false) return;
   const d=FUSION_DEMO;
-  if(d.phase==='done'){ ev.preventDefault(); ev.stopPropagation(); startFusionTest(); return; }
+  if(d.phase==='done'){ if(d.cool>0) return; ev.preventDefault(); ev.stopPropagation(); startFusionTest(); return; }
   if(d.phase!=='formed'||d.cool>0||!d.lump||!d.lump.alive) return;
   projectTo(d.lump.x,d.lump.y+0.11*d.lump.scale,d.lump.z,scr);
   const hitR=isMobile?92:72;
@@ -5138,7 +5138,7 @@ function fusionTestTap(ev){
   damageEnemy(d.lump,'hit',0,1,d.lump.x,d.lump.z+0.2);
   d.lump.state='demo'; d.lump.scale=1.32;
   if((d.lump.faces||1)<=1){
-    d.phase='done'; d.t=0;
+    d.phase='done'; d.t=0; d.cool=0.35;
     setFusionTestHint('한 얼굴만 남음 · 화면을 눌러 다시 보기');
   }else{
     setFusionTestHint((d.lump.faces||1)+'개 남음 · 한 번 더');

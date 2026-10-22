@@ -1294,7 +1294,7 @@ const furnTrash=new THREE.Group(); scene.add(furnTrash);
 // merged static meshes, one set per group so each can be hidden on its own
 const ROOM_M=new THREE.Group(), FURN_M=new THREE.Group(), PROPS_M=new THREE.Group(); scene.add(ROOM_M,FURN_M,PROPS_M);
 const TABLE={x:-0.78,z:-1.62,w:0.74,d:0.48,h:0.27}, LAUND={x:0.88,z:-1.05,r:0.36}, FAN={x:1.06,z:-3.4,r:0.17};
-const PHONE={x:0.27,z:-0.42};
+const PHONE={x:0.27,z:-0.42,r:0.09};
 // Half-width of floor that the narrowest phone screen still shows at depth z. Everything outside it is
 // furniture, so nobody walks or places where a phone player cannot see.
 function walkW(z){ return clamp(0.94-0.2*(z+3.2),0.42,1.0); }
@@ -3343,19 +3343,17 @@ function selfHitImpact(h){
   for(let i=0;i<batch.length;i++) if(vanishFromSelfHit(batch[i],i<10)) gone++;
   if(gone) hudDirty=true;
   const fr=h.frames[h.s], i=h.s<0?0:1;
-  if(h.final){ markPunch(h.s,1.35,fr.pHead,true); GI.swell[i]=Math.min(1.5,GI.swell[i]+0.55); S.noseT=S.t; SFX.punchFinal(h.s); SFX.earRing(); S.stop=0.13; camShake=0.02; camShakeT=0.26; GI.jig=0.8; selfHitWave(1.6); }
-  else { markPunch(h.s,0.85+0.3*h.k,fr.pHead,false); GI.swell[i]=Math.min(1,GI.swell[i]+0.2); SFX.punch(h.s,h.k); S.stop=0.05+0.02*h.k; camShake=0.008+0.007*h.k; camShakeT=0.12; GI.jig=Math.max(GI.jig,0.35+0.15*h.k); selfHitWave(1+0.25*h.k); }
+  if(h.final){ markPunch(h.s,1.35,fr.pHead,true); GI.swell[i]=Math.min(1.5,GI.swell[i]+0.55); S.noseT=S.t; SFX.punchFinal(h.s); SFX.earRing(); S.stop=0.13; camShake=0.02; camShakeT=0.26; GI.jig=0.8; selfHitWave(4); }
+  else { markPunch(h.s,0.85+0.3*h.k,fr.pHead,false); GI.swell[i]=Math.min(1,GI.swell[i]+0.2); SFX.punch(h.s,h.k); S.stop=0.05+0.02*h.k; camShake=0.008+0.007*h.k; camShakeT=0.12; GI.jig=Math.max(GI.jig,0.35+0.15*h.k); selfHitWave(1.25+0.55*h.k); }
   faceSpray(h);
   if(navigator.vibrate) try{ navigator.vibrate(h.final?110:32+Math.round(24*h.k)); }catch(e){}
 }
 function startSelfHit(){
   if(G.scene!=='play'||SELF_HIT.active||SELF_HIT.used||SELF_HIT.charge<SELF_HIT.need) return false;
-  const cands=EN.list.filter(e=>e.alive&&!e.dead&&e.state!=='enter'&&e.state!=='leave'&&e.state!=='wander');
+  const cands=EN.list.filter(e=>e.alive&&!e.dead&&e.state!=='leave'&&e.state!=='wander');
   if(!cands.length) return false;
   cands.sort((a,b)=>headDist(a)-headDist(b));
-  const near=cands.filter(e=>headDist(e)<.92).length;
-  const count=cands.length<=4?cands.length:Math.max(near,Math.ceil(cands.length*.35));
-  const S=SELF_HIT; S.active=true; S.used=true; S.charge=0; S.t=0; S.stop=0; S.fired=0; S.whooshed=0; S.cues={}; S.noseT=-1; S.targets=cands.slice(0,count);
+  const S=SELF_HIT; S.active=true; S.used=true; S.charge=0; S.t=0; S.stop=0; S.fired=0; S.whooshed=0; S.cues={}; S.noseT=-1; S.targets=cands.slice();
   S.batches=[]; let at=0; for(const sh of ULT_SHARE){ const n=Math.min(S.targets.length-at,Math.round(S.targets.length*sh)); S.batches.push(S.targets.slice(at,at+n)); at+=n; } S.batches.push(S.targets.slice(at));
   drag=null; cancelAim(); hideGhost(); setSelected(null); clearBubbles(true); SFX.enterWet(0,0,0,0,true); SFX.setMurmur(0); showBar(false); updateSelfHitBtn();
   const f=GI.selfHitFace; f.after=-1;
@@ -4808,6 +4806,7 @@ function placementStaticAt(x,z,r){
 function placeReason(id,x,z,ignore=null){ const f=FOOD_BY[id], r=placementRadius(f);
   if(z<ROOM.z0+PLACE_DOOR_GAP+r) return '문 앞엔 못 놔요';
   if(x<ROOM.x0+r+0.025||x>ROOM.x1-r-0.025||z>ROOM.z1-r-0.025) return '벽에 너무 붙었어요';
+  if(Math.hypot(x-PHONE.x,z-PHONE.z)<PHONE.r+r) return '핸드폰 위엔 못 놔요';
   if(Math.hypot(x,z)<CFG.HEAD_KEEPOUT+r) return '머리에 너무 가까워요';
   const s=placementStaticAt(x,z,r); if(s) return s.why;
   if(segDist(x,z,LEAF.x0,LEAF.z0,LEAF.x1,LEAF.z1)<LEAF.r+r*0.7) return '문 앞엔 못 놔요';

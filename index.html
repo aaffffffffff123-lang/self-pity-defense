@@ -335,10 +335,17 @@ const CFG = {
   // twice as many when it's full), the extra ones crawling out of the heaps. A crew clears it all for 8만 + 21만·f + 66만·f² (8만 a little, 35만 half full, 95만 full).
   TRASH_V: 230, TRASH_VOL: {kimbap:0.6,fries:0.5,ramen:0.8,cola:0.9,burger:0.8,pizza:1.6,chicken:1.4}, TRASH_MULT: 1.0,
   CLEAN_PRICE: [80000,210000,660000],
+  // the cleaning ad comes, and the button to call a crew shows, once the room is this full
+  CLEAN_FROM: 0.3,
   MAX_EN: 340,
   ENTRY_TEAR: 0.012, INNER_EROSION: 0.00015, MAX_EROSION: 0.004, ENTER_TIME: 0.78, TEAR_CARRY: 0.5,
+  // the ultimate is ready once the tears reach this (and only once a day)
+  ULT_TEAR: 0.5,
   CURVE: { base:18, grow:10, grow2:0.6 },
   DAY_LOAD: {3:0.78,4:0.87,5:0.93,6:0.82,7:0.90},
+  // the first days: more of them, from the first trickle to the last flood, so a day isn't won by one food.
+  // Eased off on days 4-5 so day 5 stays below day 6, when the fourth flood starts.
+  EARLY_LOAD: {1:1.3,2:1.3,3:1.3,4:1.2,5:1.1},
   ROOM: { x0:-1.2, x1:1.2, z0:-3.6, z1:1.9, H:3.2 },
   DOOR: { x0:-0.4, x1:0.4, h:2.0 },
   BATH: { x0:-1.0, x1:-0.52, h:1.9, day:3 },
@@ -346,14 +353,18 @@ const CFG = {
   PARTY_DAY: 4,
   HEAD_KEEPOUT: 0.42,
 };
+// range: how far a food notices the selves (the ring shown while placing). It stays short so where the food sits
+// matters, and the selves get some way into the room, where their faces and lines can be seen.
+// What happens after the throw keeps its own length: a burger still rolls `roll`, a pizza slice still flies `reach`.
+// near: anyone this close sets off the line throws (burger, pizza) even when too few stand in a line.
 const FOODS = [
-  {id:'kimbap', name:'삼각김밥', price:1500, ammo:8, fatShot:0.008, cd:1.0, range:0.90, foot:0.09, h:0.11},
-  {id:'ramen',  name:'컵라면',   price:1600, ammo:4, fatShot:0.020, cd:2.2, range:0.80, foot:0.075, h:0.12, splash:0.2, maxKill:3},
-  {id:'fries',  name:'감자튀김', price:3000, ammo:8, fatShot:0.008, cd:1.0, range:0.70, foot:0.08, h:0.13, volley:2},
-  {id:'cola',   name:'콜라',     price:3000, ammo:3, fatShot:0.018, cd:3.0, range:0.70, foot:0.07, h:0.3, cone:0.45, killR:0.45, knockR:0.75, maxKill:10},
-  {id:'burger', name:'햄버거',   price:6000, ammo:4, fatShot:0.022, cd:2.6, range:1.20, foot:0.1, h:0.22, roll:1.40, maxKill:10},
-  {id:'pizza',  name:'피자',     price:20000,ammo:6, fatShot:0.012, cd:1.1, range:1.50, foot:0.19, h:0.075, maxKill:18},
-  {id:'chicken',name:'치킨',     price:25000,ammo:1, fatShot:0.075, cd:1.0, range:1.25, foot:0.16, h:0.14, blast:0.62, knock:1.0, minCrowd:15, grease:8, greaseR:0.27, maxKill:65},
+  {id:'kimbap', name:'삼각김밥', price:1500, ammo:8, fatShot:0.008, cd:1.0, range:0.50, foot:0.09, h:0.11},
+  {id:'ramen',  name:'컵라면',   price:1600, ammo:4, fatShot:0.020, cd:2.2, range:0.60, foot:0.075, h:0.12, splash:0.2, maxKill:3},
+  {id:'fries',  name:'감자튀김', price:3000, ammo:8, fatShot:0.008, cd:1.0, range:0.45, foot:0.08, h:0.13, volley:2},
+  {id:'cola',   name:'콜라',     price:3000, ammo:3, fatShot:0.018, cd:3.0, range:0.50, foot:0.07, h:0.3, cone:0.45, killR:0.40, knockR:0.60, maxKill:10},
+  {id:'burger', name:'햄버거',   price:6000, ammo:4, fatShot:0.022, cd:2.6, range:0.60, foot:0.1, h:0.22, roll:1.40, near:0.20, maxKill:10},
+  {id:'pizza',  name:'피자',     price:20000,ammo:6, fatShot:0.012, cd:1.1, range:0.80, foot:0.19, h:0.075, reach:1.65, near:0.20, maxKill:18},
+  {id:'chicken',name:'치킨',     price:25000,ammo:1, fatShot:0.075, cd:1.0, range:0.90, foot:0.16, h:0.14, blast:0.62, knock:1.0, minCrowd:15, grease:8, greaseR:0.27, maxKill:65},
 ];
 const FOOD_BY = Object.fromEntries(FOODS.map(f=>[f.id,f]));
 const CHEAPEST_FOOD = Math.min(...FOODS.map(f=>f.price));
@@ -1980,7 +1991,8 @@ const EN={ list:[], parts:{}, max:CFG.MAX_EN };
   const legGeo=new THREE.CapsuleGeometry(0.0105,0.03,3,8); legGeo.translate(0,-0.0255,0);
   EN.parts.head=mk(headGeo,M.skin,true); EN.parts.hair=mk(hairGeo,M.hair,true); EN.parts.face=mk(faceGeo,faceMat,false);
   EN.parts.body=mk(bodyGeo,enemyTeeMat,true); EN.parts.armL=mk(armGeo,enemyTeeMat,true); EN.parts.armR=mk(armGeo,enemyTeeMat,true); EN.parts.legL=mk(legGeo,M.pants,true); EN.parts.legR=mk(legGeo,M.pants,true);
-  EN.parts.foreL=mk(foreGeo,M.skin,true); EN.parts.foreR=mk(foreGeo,M.skin,true);
+  // long sleeves: the forearms are shirt too, only the hands are bare
+  EN.parts.foreL=mk(foreGeo,enemyTeeMat,true); EN.parts.foreR=mk(foreGeo,enemyTeeMat,true);
   EN.parts.handL=mk(handGeo,M.skin,true); EN.parts.handR=mk(handGeo,M.skin,true);
   EN.faceAttr=faceGeo.getAttribute('frame');
   const hatGeo=new THREE.ConeGeometry(0.019,0.05,14); hatGeo.translate(0,EHR*0.8+0.025,-0.004);
@@ -2099,7 +2111,7 @@ function syncEnemies(tNow){
     enemyBodyColor.set(ENEMY_BODY_COLORS[e.kind]||ENEMY_BODY_COLORS.pity);
     if(e.hasteT>0) enemyBodyColor.lerp(enemyHotColor,0.24+0.08*Math.sin(tNow*12+e.seed));
     if(e.hitFlash>0) enemyBodyColor.lerp(enemyWhite,clamp(e.hitFlash,0,1)*0.55);
-    P.body.setColorAt(i,enemyBodyColor); P.armL.setColorAt(i,enemyBodyColor); P.armR.setColorAt(i,enemyBodyColor);
+    P.body.setColorAt(i,enemyBodyColor); P.armL.setColorAt(i,enemyBodyColor); P.armR.setColorAt(i,enemyBodyColor); P.foreL.setColorAt(i,enemyBodyColor); P.foreR.setColorAt(i,enemyBodyColor);
     if(e.kind==='lump'){
       const extras=Math.min(4,Math.max(0,(e.faces||1)-1));
       for(let j=0;j<extras;j++){ const p=LUMP_FACE_POS[j], fi=lumpFaceN++;
@@ -2112,7 +2124,7 @@ function syncEnemies(tNow){
   }
   for(const k in P){ P[k].count=n; P[k].instanceMatrix.needsUpdate=true; }
   if(P.hat.instanceColor) P.hat.instanceColor.needsUpdate=true;
-  for(const p of [P.body,P.armL,P.armR]) if(p.instanceColor) p.instanceColor.needsUpdate=true;
+  for(const p of [P.body,P.armL,P.armR,P.foreL,P.foreR]) if(p.instanceColor) p.instanceColor.needsUpdate=true;
   EN.lumpBump.count=EN.lumpFace.count=lumpFaceN; EN.lumpBump.instanceMatrix.needsUpdate=true; EN.lumpFace.instanceMatrix.needsUpdate=true; EN.lumpFaceAttr.needsUpdate=true;
   EN.faceAttr.needsUpdate=true;
 }
@@ -2250,8 +2262,6 @@ function finishEnter(e){
   G.tear=Math.min(1,G.tear+CFG.ENTRY_TEAR*mass);
   queueTearGain(G.tear-before);
   G.gnawPulse=1;
-  // The ultimate is fed only by a self actually getting inside, not by time or routine kills.
-  chargeUltimate(20*mass);
   removeEnemy(e);
 }
 
@@ -2361,7 +2371,7 @@ const DEC={
   drop(x,z,s,col){ const g=fctx; g.fillStyle=col; ell(g,fpx(x),fpz(z),s*PPM,s*PPM*0.75,rand(0,3)); g.fill(); floorDirtyMark(); },
   // A crushed one: the same little figure pressed flat on its back (see SQ), lying in the blood squeezed
   // out from under it. (dx,dz): which way it was run over, so the blood streaks run that way.
-  pancake(x,z,dx,dz,fat){
+  pancake(x,z,dx,dz,fat,kind){
     const g=fctx, px=fpx(x), py=fpz(z), dir=(dx||dz)?Math.atan2(dz,dx):null;
     // blood squirted out from under the body: long streaks the way it was run over, short ones out of the sides
     g.save(); g.translate(px,py);
@@ -2372,7 +2382,7 @@ const DEC={
     if(dir!==null){ for(let i=0;i<irand(4,6);i++){ g.fillStyle=pick(BLOOD); streak(dir+rand(-0.55,0.55),rand(0.07,0.1)*PPM,rand(0.04,0.13)*PPM,rand(1.6,3.2)); }
       for(const sd of [-1,1]) for(let i=0;i<irand(1,2);i++){ g.fillStyle=pick(BLOOD); streak(dir+sd*(Math.PI/2+rand(-0.45,0.45)),rand(0.04,0.06)*PPM,rand(0.015,0.045)*PPM,rand(1.2,2.2)); } }
     else for(let i=0;i<irand(6,9);i++){ g.fillStyle=pick(BLOOD); streak(rand(0,6.28),rand(0.05,0.09)*PPM,rand(0.02,0.07)*PPM,rand(1.3,2.6)); }
-    const spr=squashSprite(fat||0);
+    const spr=squashSprite(fat||0,kind);
     if(spr){ const S=SQ.W*PPM; g.rotate(dir===null?rand(0,6.28):dir+Math.PI/2+rand(-0.45,0.45)); if(Math.random()<0.5) g.scale(-1,1);
       g.drawImage(spr.pool,-S/2,-S/2,S,S); g.drawImage(spr.img,-S/2,-S/2,S,S);
       // pressed hard in the middle: blood soaked through the shirt
@@ -2442,7 +2452,7 @@ function squashFaceTex(){
   g.save(); rr(g,29,57,38,19,9); g.clip(); g.fillStyle='#FF7C8A'; ell(g,48,76,14,6); g.fill(); g.fillStyle='#fff'; g.fillRect(29,57,38,4); g.restore();
   const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t;
 }
-function squashFigure(fat,pose,faceM){
+function squashFigure(fat,pose,faceM,mask){
   const P=EN.parts, root=new THREE.Group(), fig=new THREE.Group(); root.add(fig);
   const headW=1+0.09*fat, headD=1+0.1*fat, bodyW=1+0.55*fat, bodyD=1+0.72*fat, legW=1+0.28*fat;
   const add=(par,im,mat,x,y,z,sx,sy,sz)=>{ const m=new THREE.Mesh(im.geometry,mat||im.material); m.position.set(x||0,y||0,z||0); m.scale.set(sx||1,sy||1,sz||1); par.add(m); return m; };
@@ -2458,6 +2468,8 @@ function squashFigure(fat,pose,faceM){
     add(lg,P.legL,null,0,0,0,legW*1.1,1,legW); }
   fig.rotation.x=-Math.PI/2; fig.position.set(0,0.03,0.08);   // on its back, face up, centred in the frame
   root.scale.set(1.3,0.12,1.3);                       // pressed flat and spread out
+  // mask: the shirt (body and both sleeves) white and the rest black, to find the shirt on the baked picture
+  if(mask) root.traverse(o=>{ if(o.isMesh) o.material=o.material===P.body.material?mask.cloth:mask.other; });
   return root;
 }
 function boxBlur(a,S,r){ const o=new Float32Array(S*S), w=2*r+1;
@@ -2493,6 +2505,7 @@ function buildSquashSprites(){
     const px=new Uint8Array(N*N*4), toS=new Uint8Array(256); for(let i=0;i<256;i++){ const c=i/255; toS[i]=Math.round(255*(c<=0.0031308?12.92*c:1.055*Math.pow(c,1/2.4)-0.055)); }
     const poses=[{arm:[2.15,1.35],elbow:[0.35,-0.25],leg:[0.38,0.2],head:0.18},{arm:[1.55,2.45],elbow:[-0.2,0.45],leg:[0.22,0.52],head:-0.22},{arm:[2.55,2.3],elbow:[0.5,0.3],leg:[0.48,0.4],head:0.05},{arm:[1.2,1.75],elbow:[-0.35,0.15],leg:[0.15,0.62],head:-0.12}];
     const big=mkCanvas(N,N), bg=big.getContext('2d',{willReadFrequently:true}), img=bg.createImageData(N,N), D=img.data;
+    const maskM={cloth:new THREE.MeshBasicMaterial({color:0xFFFFFF}), other:new THREE.MeshBasicMaterial({color:0x000000})}, S=SQ.px;
     const prevTarget=renderer.getRenderTarget(), prevClear=renderer.getClearColor(new THREE.Color()), prevAlpha=renderer.getClearAlpha();
     for(const fat of [0,0.5,1]){ const set=[];
       for(let pi=0;pi<poses.length;pi++){ const fig=squashFigure(fat,poses[pi],faceM); sc.add(fig);
@@ -2501,13 +2514,30 @@ function buildSquashSprites(){
         for(let y=0;y<N;y++){ const s=(N-1-y)*N*4, o=y*N*4; for(let x=0;x<N*4;x+=4){ D[o+x]=toS[px[s+x]]; D[o+x+1]=toS[px[s+x+1]]; D[o+x+2]=toS[px[s+x+2]]; D[o+x+3]=px[s+x+3]; } }
         bg.putImageData(img,0,0);
         const c=mkCanvas(SQ.px,SQ.px), g=c.getContext('2d',{willReadFrequently:true}); g.imageSmoothingEnabled=true; g.imageSmoothingQuality='high'; g.drawImage(big,0,0,SQ.px,SQ.px);
-        set.push({img:c,pool:squashPool(c,pi*2.7+fat*5.1)}); }
+        // the same figure again with the shirt white and the rest black: how much of each small pixel is shirt
+        const mf=squashFigure(fat,poses[pi],faceM,maskM); sc.add(mf);
+        renderer.setRenderTarget(rt); renderer.setClearColor(0x000000,0); renderer.clear(); renderer.render(sc,cam); renderer.readRenderTargetPixels(rt,0,0,N,N,px);
+        sc.remove(mf);
+        const mask=new Uint8Array(S*S);
+        for(let y=0;y<S;y++) for(let x=0;x<S;x++){ let a=0; for(let j=0;j<R;j++){ const row=(N-1-(y*R+j))*N+x*R; for(let i=0;i<R;i++) a+=px[(row+i)*4]; } mask[y*S+x]=Math.round(a/(R*R)); }
+        set.push({img:c,pool:squashPool(c,pi*2.7+fat*5.1),mask,tint:{}}); }
       SQ.sets.push({fat,list:set}); }
     renderer.setRenderTarget(prevTarget); renderer.setClearColor(prevClear,prevAlpha);
-    rt.dispose(); faceM.map.dispose(); faceM.dispose();
+    rt.dispose(); faceM.map.dispose(); faceM.dispose(); maskM.cloth.dispose(); maskM.other.dispose();
   }catch(err){ SQ.sets.length=0; }
 }
-function squashSprite(fat){ if(!SQ.sets.length) return null; let best=SQ.sets[0]; for(const s of SQ.sets) if(Math.abs(s.fat-fat)<Math.abs(best.fat-fat)) best=s; return pick(best.list); }
+function squashSprite(fat,kind){ if(!SQ.sets.length) return null; let best=SQ.sets[0]; for(const s of SQ.sets) if(Math.abs(s.fat-fat)<Math.abs(best.fat-fat)) best=s;
+  const s=pick(best.list); return {img:squashTinted(s,kind||'pity'),pool:s.pool}; }
+// The pictures are baked in a white shirt. Each kind gets its own copy, the shirt multiplied by the colour it wears
+// alive (as its instance colour does on the white shirt material), made the first time one of that kind is crushed.
+function squashTinted(s,kind){
+  if(s.tint[kind]) return s.tint[kind];
+  const S=SQ.px, hex=ENEMY_BODY_COLORS[kind]||ENEMY_BODY_COLORS.pity, kr=(hex>>16&255)/255, kg=(hex>>8&255)/255, kb=(hex&255)/255;
+  const c=mkCanvas(S,S), g=c.getContext('2d',{willReadFrequently:true}); g.drawImage(s.img,0,0);
+  const im=g.getImageData(0,0,S,S), d=im.data, m=s.mask;
+  for(let i=0;i<S*S;i++){ const k=m[i]/255; if(!k) continue; const o=i*4; d[o]*=1-k+k*kr; d[o+1]*=1-k+k*kg; d[o+2]*=1-k+k*kb; }
+  g.putImageData(im,0,0); return s.tint[kind]=c;
+}
 
 /* =========================================================
    FOOD MODELS
@@ -2750,8 +2780,8 @@ function fireTower(t,manual=null){
   else if(f.id==='fries'){ const sorted=aimTarget?[aimTarget]:cands.slice().sort((a,b)=>headDist(a)-headDist(b)); for(let i=0;i<Math.min(f.volley,sorted.length);i++) launchStraight('fry',p.x,p.y+0.12,p.z,sorted[i],3.2,f.range+0.20); SFX.fries(); }
   else if(f.id==='ramen'){ const best=aimTarget||bestCluster(cands,f.splash).best; launchLob('ramen',p.x,p.y+0.1,p.z,best.x,best.z,0.5,0.35); SFX.ramenFire(); }
   else if(f.id==='cola'){ const close=cands.filter(e=>Math.hypot(e.x-t.x,e.z-t.z)<f.killR); if(!manual&&close.length<(allSpawned()?1:4)){ t.pulse=0; return false; } const best=aimTarget||bestCluster(close.length?close:cands,0.2).best; const dx=best.x-t.x, dz=best.z-t.z, l=Math.hypot(dx,dz)||1; colaSpray(t,dx/l,dz/l); }
-  else if(f.id==='burger'){ const line=bestLine(cands,t.x,t.z,f.roll,0.15), dir=aimTarget?[(aimTarget.x-t.x),(aimTarget.z-t.z)]:line.dir; let near=false; for(const e of cands){ if(Math.hypot(e.x-t.x,e.z-t.z)<0.35){ near=true; break; } } if(!manual&&line.n<2&&!near){ t.pulse=0; return false; } const dl=Math.hypot(dir[0],dir[1])||1; const b=burgerMesh(1); b.position.set(p.x,p.y+0.06,p.z); b.rotation.z=Math.PI/2; scene.add(b); projs.push({type:'burger',mesh:b,x:p.x,y:p.y+0.06,z:p.z,dx:dir[0]/dl,dz:dir[1]/dl,dist:0,max:f.roll,spd:1.25,roll:0,hit:new Set()}); SFX.burger(); }
-  else if(f.id==='pizza'){ const line=bestLine(cands,t.x,t.z,f.range,0.16), dir=aimTarget?[(aimTarget.x-t.x),(aimTarget.z-t.z)]:line.dir; let near=false; for(const e of cands){ if(Math.hypot(e.x-t.x,e.z-t.z)<0.35){ near=true; break; } } if(!manual&&line.n<3&&!near){ t.pulse=0; return false; } const dl=Math.hypot(dir[0],dir[1])||1; const sl=pizzaSliceMesh(); sl.position.set(p.x,p.y+0.1,p.z); scene.add(sl); projs.push({type:'pizza',mesh:sl,x:p.x,y:p.y+0.1,z:p.z,dx:dir[0]/dl,dz:dir[1]/dl,dist:0,max:f.range+0.15,spd:2.3,spin:0,hit:new Set()});  SFX.pizza(); }
+  else if(f.id==='burger'){ const line=bestLine(cands,t.x,t.z,f.roll,0.15), dir=aimTarget?[(aimTarget.x-t.x),(aimTarget.z-t.z)]:line.dir; let near=false; for(const e of cands){ if(Math.hypot(e.x-t.x,e.z-t.z)<f.near){ near=true; break; } } if(!manual&&line.n<2&&!near){ t.pulse=0; return false; } const dl=Math.hypot(dir[0],dir[1])||1; const b=burgerMesh(1); b.position.set(p.x,p.y+0.06,p.z); b.rotation.z=Math.PI/2; scene.add(b); projs.push({type:'burger',mesh:b,x:p.x,y:p.y+0.06,z:p.z,dx:dir[0]/dl,dz:dir[1]/dl,dist:0,max:f.roll,spd:1.25,roll:0,hit:new Set()}); SFX.burger(); }
+  else if(f.id==='pizza'){ const line=bestLine(cands,t.x,t.z,f.range,0.16), dir=aimTarget?[(aimTarget.x-t.x),(aimTarget.z-t.z)]:line.dir; let near=false; for(const e of cands){ if(Math.hypot(e.x-t.x,e.z-t.z)<f.near){ near=true; break; } } if(!manual&&line.n<3&&!near){ t.pulse=0; return false; } const dl=Math.hypot(dir[0],dir[1])||1; const sl=pizzaSliceMesh(); sl.position.set(p.x,p.y+0.1,p.z); scene.add(sl); projs.push({type:'pizza',mesh:sl,x:p.x,y:p.y+0.1,z:p.z,dx:dir[0]/dl,dz:dir[1]/dl,dist:0,max:f.reach,spd:2.3,spin:0,hit:new Set()});  SFX.pizza(); }
   else if(f.id==='chicken'){ if(projs.some(p=>p.type==='chicken')){ t.pulse=0; return false; }
     const cluster=bestCluster(cands,f.blast), best=aimTarget||cluster.best, n=cluster.n; let stuckNear=false; for(const e of cands){ if(e.state==='squat'&&Math.hypot(e.x-t.x,e.z-t.z)<0.4){ stuckNear=true; break; } }
     let need=f.minCrowd; if(allSpawned()){ let alive=0; for(const e of EN.list) if(e.alive&&(e.state==='walk'||e.state==='squat'||e.state==='climb'||e.state==='slip'||e.state==='intro')) alive++; need=Math.min(need,Math.max(1,Math.ceil(alive*0.5))); }
@@ -3015,7 +3045,7 @@ function damageEnemy(e,mode,dx,dz,srcX,srcZ){
     const sdx=(srcX||0)-e.x, sdz=(srcZ||0)-e.z;
     e.accuseYaw=Number.isFinite(srcX)&&Number.isFinite(srcZ)&&Math.hypot(sdx,sdz)>0.012?Math.atan2(sdx,sdz):(Math.hypot(dx||0,dz||0)>0.001?Math.atan2(-(dx||0),-(dz||0)):e.yaw+Math.PI);
     shQuery(e.x,e.z,0.2,(o)=>{ if(o.alive&&!o.dead&&o.state!=='enter'&&o.state!=='leave') o.hasteT=Math.max(o.hasteT||0,2.5); });
-    burstParts(e.x,e.y+0.08,e.z,5,'#D7C2B7',0.55,'chunk',0.004); showEnemyLine(e,'거봐',{life:1.05,pitch:500}); SFX.heuk(0.06);
+    burstParts(e.x,e.y+0.08,e.z,5,'#D7C2B7',0.55,'chunk',0.004); SFX.heuk(0.06);
     return true;
   }
   if(e.kind==='lump'&&(e.faces||1)>1){
@@ -3029,9 +3059,10 @@ function damageEnemy(e,mode,dx,dz,srcX,srcZ){
 function killEnemy(e,mode,dx,dz){
   if(!e.alive||e.dead||e.state==='enter') return; e.dead=true;
   const lumpK=e.kind==='lump'?1.35:1;
-  if(mode==='crush') DEC.pancake(e.x,e.z,dx||0,dz||0,clamp((e.fatK||0)/1.4,0,1)); else DEC.splat(e.x,e.z,0.045*lumpK,pick(BLOOD));
+  if(mode==='crush') DEC.pancake(e.x,e.z,dx||0,dz||0,clamp((e.fatK||0)/1.4,0,1),e.kind); else DEC.splat(e.x,e.z,0.045*lumpK,pick(BLOOD));
   burstParts(e.x,e.y+0.07,e.z,Math.round((mode==='crush'?9:13)*lumpK),pick(BLOOD),mode==='crush'?1.6:1.1,'blood',0.006*lumpK);
-  for(let i=0;i<(e.kind==='lump'?5:3);i++) burstParts(e.x,e.y+0.07,e.z,1,e.kind==='lump'?'#4E3A51':'#151515',1.2,'chunk',0.007*lumpK);
+  const shirt='#'+(ENEMY_BODY_COLORS[e.kind]||ENEMY_BODY_COLORS.pity).toString(16).padStart(6,'0');
+  for(let i=0;i<(e.kind==='lump'?5:3);i++) burstParts(e.x,e.y+0.07,e.z,1,shirt,1.2,'chunk',0.007*lumpK);
   if(e.party){ const cc=['#FF5A7A','#4FC3F7','#FFD54F','#81C784','#BA68C8','#FFFFFF']; for(let i=0;i<14;i++){ const a=rand(0,6.28), s=rand(0.4,1.4); addPart(e.x,e.y+0.1,e.z,pick(cc),rand(0.004,0.008),Math.cos(a)*s,rand(0.9,2.0),Math.sin(a)*s,'confetti'); } SFX.popper(); }
   G.kills++; hudDirty=true; removeEnemy(e);
 }
@@ -3118,10 +3149,12 @@ function updateSelfHitBtn(){
   selfHitBtn.setAttribute('aria-label',ready?'궁극기 준비됨':`궁극기 게이지 ${pct}퍼센트`);
   if(ULTFX.setState(visible,ready,SELF_HIT.charge,SELF_HIT.need)) SFX.ultReady();
 }
-function chargeUltimate(amount=1){
-  if(G.scene!=='play'||SELF_HIT.active||SELF_HIT.used||SELF_HIT.charge>=SELF_HIT.need) return;
-  SELF_HIT.charge=Math.min(SELF_HIT.need,SELF_HIT.charge+amount);
-  updateSelfHitBtn();
+// The badge fills with the tears and catches fire when they reach CFG.ULT_TEAR: it is there for the worst of a day,
+// once a day. Tears only ever rise within a day, so neither does the badge go back down.
+function syncUltimateCharge(){
+  if(G.scene!=='play'||SELF_HIT.active||SELF_HIT.used) return;
+  const c=Math.round(clamp(G.tear/CFG.ULT_TEAR,0,1)*SELF_HIT.need);
+  if(c!==SELF_HIT.charge){ SELF_HIT.charge=c; updateSelfHitBtn(); }
 }
 function clearSelfHitWaves(){
   for(const w of SELF_HIT.waves){ scene.remove(w.m); w.m.material.dispose(); }
@@ -3389,8 +3422,8 @@ function updUltAfter(dt){
   if(f.after>=0){ f.after+=dt; const k=clamp(1-f.after/3.2,0,1); f.sob=k*(0.5+0.5*Math.abs(Math.sin(f.after*6.8)));
     if((++f.mouthTick)%2===0||k===0) GI.drawMouth({sob:f.sob*0.8}); if(k===0){ f.after=-1; f.sob=0; } }
 }
-function resetSelfHitForRound(clearCharge=false){
-  const S=SELF_HIT; S.active=false; S.used=false; if(clearCharge) S.charge=0; S.t=0; S.targets.length=0; S.batches.length=0; S.plan=null; S.noseT=-1; S.stop=0; camUlt=0; FLYSND.duck=1;
+function resetSelfHitForRound(){
+  const S=SELF_HIT; S.active=false; S.used=false; S.charge=0; S.t=0; S.targets.length=0; S.batches.length=0; S.plan=null; S.noseT=-1; S.stop=0; camUlt=0; FLYSND.duck=1;
   clearSelfHitWaves(); const f=GI.selfHitFace; f.tear=0; f.woe0=0; f.woe=0; f.red=0; f.flush=0; f.squeeze=0; f.sob=0; f.after=-1; GI.pant=0; GI.resetSelfHitPose(); clearFaceMarks(); ULTFX.reset(); updateSelfHitBtn();
 }
 selfHitBtn.addEventListener('pointerdown',ev=>{ ev.preventDefault(); ev.stopPropagation(); audioInit(); startSelfHit(); });
@@ -3411,8 +3444,8 @@ function floodEnts(day,n){
   const cyc=['door','bath','win']; for(let i=0;i<n;i++) s.push(cyc[(i+day)%3]); s[n-1]='door'; return s;
 }
 function roundPlan(r){ const C=CFG.CURVE, day=r+1, floods=day<=2?2:day<=5?3:4;
-  const load=CFG.DAY_LOAD[day]||1;
-  return { trickle:6+2*r, trickleDur:8.5+Math.min(5,r*0.7), floods, floodSize:Math.round((C.base+C.grow*r+C.grow2*r*r)*load), climax:1.35, gap:11.5, speed:Math.min(0.28,0.2+0.007*r), ents:floodEnts(day,floods) }; }
+  const load=CFG.DAY_LOAD[day]||1, early=CFG.EARLY_LOAD[day]||1;
+  return { trickle:Math.round((6+2*r)*early), trickleDur:8.5+Math.min(5,r*0.7), floods, floodSize:Math.round((C.base+C.grow*r+C.grow2*r*r)*load*early), climax:1.35, gap:11.5, speed:Math.min(0.28,0.2+0.007*r), ents:floodEnts(day,floods) }; }
 function buildSpawns(r){
   const p=roundPlan(r), S=[], C=[];
   for(let i=0;i<p.trickle;i++) S.push({t:1.6+(i/Math.max(1,p.trickle-1))*p.trickleDur+rand(0,0.35),ent:'door'});
@@ -3540,7 +3573,7 @@ function snapshot(){
   const old=G.snap;
   G.snap={
     money:G.money,kills:G.kills,fat:G.fat,eaten:G.eaten,round:G.round,shift:G.shift,
-    tear:G.tear,stain:G.stain,debt:G.debt,loanBalance:G.loanBalance,ultimateCharge:SELF_HIT.charge,
+    tear:G.tear,stain:G.stain,debt:G.debt,loanBalance:G.loanBalance,
     weekMiss:G.weekMiss,monthMiss:G.monthMiss,monthFood:G.monthFood,monthBuys:G.monthBuys,monthTaxi:G.monthTaxi,monthTaxiN:G.monthTaxiN,monthClean:G.monthClean,rentOwed:G.rentOwed,billOwed:G.billOwed,evictDue:G.evictDue,saveN:G.saveN,saveMiss:G.saveMiss,lastStay:G.lastStay,
     trashV:G.trashV,cleanBooked:G.cleanBooked,propsGone:G.propsGone,
     towers:towers.map(t=>({
@@ -3568,7 +3601,7 @@ function startRound(r){
   if(G.rentOwed>0&&G.evictDue>=0&&G.evictDue-G.round===1) sms('집주인','월세 미납액 '+won(G.rentOwed)+'\n내일까지 입금해 주세요.');
   if(G.round%CFG.MONTH===(CFG.RENT_DAY+CFG.MONTH-3)%CFG.MONTH&&G.remindDay!==G.round){ G.remindDay=G.round; sms('은행',WEB+'3일 뒤 월세 '+won(CFG.RENT)+' 자동이체 예정입니다.'); }
   const tf=trashFill();
-  if(tf>=0.3&&!G.trashAdSent){ G.trashAdSent=true; sms('광고','(광고) 원룸 청소·쓰레기 정리 8만 원부터\n당일 방문, 비밀 보장'); }
+  if(tf>=CFG.CLEAN_FROM) sendCleaningAd();
   if(tf>=0.7&&!G.trashWarnSent){ G.trashWarnSent=true; sms('집주인','옆집에서 냄새 난다고 연락 왔어요. 정리 부탁드립니다.'); toast('방에 쓰레기가 너무 많습니다. 집청소를 부르지 않으면 점점 더 많이 몰려옵니다.',6.5); cleanWarnT=9; }
 }
 function fatAfterRound(fat,eaten){ return Math.min(1.4,fat+eaten); }
@@ -3580,7 +3613,7 @@ function newRun(){
   G.weekMiss=0; G.monthMiss=0; G.monthFood=0; G.monthBuys=0; G.monthTaxi=0; G.monthTaxiN=0; G.monthClean=0; G.rentOwed=0; G.billOwed=0; G.evictDue=-1; G.evicted=false; G.saveN=0; G.saveMiss=0; G.lastStay=false;
   G.trashV=0; G.cleanBooked=0; G.propsGone=false; G.trashAdSent=false; G.trashWarnSent=false; emptyRoom(false); setPropsVisible(true); G.lastMode=''; G.adDay=-1; G.remindDay=-1; smsClear();
   G.money=CFG.START_MONEY; G.kills=0; G.fat=0; G.eaten=0; G.round=0; G.shift=0; G.tear=0; G.invaders=0; G.gnawPulse=0; G.firstRentShown=false;
-  resetSelfHitForRound(true);
+  resetSelfHitForRound();
   GI.setFat(0); updHeadW(); GI.lie();
   for(const t of towers.slice()) removeTower(t);
   clearNight(); clearTrash(); buildTrashPile(); clearProjectiles(); zones.length=0; PT.list.length=0; clearFaceDecals(); paintFloorBase(); seedLumps();
@@ -3611,7 +3644,6 @@ function restoreSnap(){
   G.kills=s.kills;
   G.fat=s.fat;
   G.eaten=s.eaten||0;
-  SELF_HIT.charge=s.ultimateCharge||0;
 
   GI.setFat(s.fat);
   updHeadW();
@@ -3819,6 +3851,7 @@ function updPlay(dt){
     if(Math.random()<dt*Math.min(4,G.invaders*0.14)) G.gnawPulse=Math.max(G.gnawPulse,0.28);
   }
   updateDanger(dt);
+  syncUltimateCharge();
   if(G.tear>=1){ G.tear=1; startCry(); return; }
   if(allSpawned()){
     const alive=EN.list.filter(e=>e.alive&&e.state!=='leave').length;
@@ -3862,11 +3895,15 @@ function updSms(dt){ if(SMS.cur){ if(SMS.cur.sticky) return; SMS.t-=dt; if(SMS.t
 const cleanBtn=$('cleanBtn'), cleanL1=cleanBtn.querySelector('.cl1'), cleanL2=cleanBtn.querySelector('.cl2'); let cleanArmT=0, cleanWarnT=0, cleanTxt='';
 function cleanPrice(){ const f=trashFill(), c=CFG.CLEAN_PRICE; return Math.round((c[0]+c[1]*f+c[2]*f*f)/10000)*10000; }
 function manwon(v){ return Math.round(v/10000)+'만 원'; }
+// The cleaning ad comes with the button: at the start of the day the room is that full, or the moment it gets there
+function sendCleaningAd(){ if(G.trashAdSent) return; G.trashAdSent=true; sms('광고','(광고) 원룸 청소·쓰레기 정리 8만 원부터\n당일 방문, 비밀 보장'); }
 function updCleanBtn(dt){
-  const show=G.scene==='play'&&!SELF_HIT.active&&(G.cleanBooked>0||TP.n>=3);
+  // offered from the point the cleaning ad comes (a room 30% full), not from the first few heaps
+  const show=G.scene==='play'&&!SELF_HIT.active&&(G.cleanBooked>0||trashFill()>=CFG.CLEAN_FROM);
   cleanBtn.classList.toggle('on',show);
   if(cleanWarnT>0) cleanWarnT-=dt;
   if(!show){ cleanArmT=0; cleanBtn.classList.remove('armed'); return; }
+  if(!G.cleanBooked) sendCleaningAd();
   if(cleanArmT>0){ cleanArmT-=dt; if(cleanArmT<=0) cleanBtn.classList.remove('armed'); }
   const p=cleanPrice(), booked=G.cleanBooked>0, armed=cleanArmT>0;
   const l1=booked?'청소 예약됨':armed?'한 번 더 누르면 결제':'집청소', l2=booked?'오늘 밤':manwon(p);
@@ -3938,23 +3975,32 @@ function payTaxi(c){ if(!c.taxi||c.taxiPaid) return; c.taxiPaid=true; const f=Ma
 // Morning: what the night paid, then what the month takes. What's owed comes out of the account first, all of it
 // that's there: rent arrears, then unpaid bills, then the phone loan. A short rent becomes arrears immediately;
 // three mornings remain to clear it before the lease ends.
+// A morning's bank texts (the pay in, what was owed taken back, interest, the bills) come as one text with the
+// balance once at the end; the other senders follow it: 근무 알림, then 은행, then 집주인, then 카드.
+const BANK={lines:null,loan:false,note:''};
+function bankText(line){ if(BANK.lines) BANK.lines.push(line); else sms('은행',WEB+line+'\n잔액 '+won(G.money)); }
+function flushMorningTexts(later){
+  const L=BANK.lines; BANK.lines=null;
+  if(L&&(L.length||BANK.note)){ const body=WEB+L.concat('잔액 '+won(G.money)).join('\n')+(BANK.loan&&G.loanBalance>0?'\n대출 잔액 '+won(G.loanBalance)+' · 연 '+Math.round(CFG.LOAN_APR*100)+'%':'')+(BANK.note?'\n'+BANK.note:'');
+    sms('은행',body,{hold:clamp(1.9+body.length*0.032,2.6,6.5)}); }
+  for(const [from,body] of later) sms(from,body);
+}
 function payBill(amt,label,kind){ const paid=Math.min(G.money,amt), owed=amt-paid; G.money-=paid;
-  if(paid>0) sms('은행',WEB+'출금 '+won(paid)+' '+label+(owed?' (일부)':'')+'\n잔액 '+won(G.money));
-  else sms('은행',WEB+label+' '+won(amt)+'\n잔액 부족으로 출금되지 않았습니다.');
+  bankText(paid>0?'출금 '+won(paid)+' '+label+(owed?' (일부)':''):label+' '+won(amt)+' 잔액 부족으로 출금되지 않았습니다.');
   if(owed){ G.debt+=owed; if(kind==='rent') G.rentOwed+=owed; else G.billOwed+=owed; }
   return {paid,owed}; }
 function accrueLoanInterest(){
   if(G.loanBalance<=0) return 0;
   const interest=Math.max(1,Math.round(G.loanBalance*(CFG.LOAN_APR/12)));
   G.loanBalance+=interest; G.debt+=interest;
-  sms('은행',WEB+'비상금대출 이자 '+won(interest)+'\n대출 잔액 '+won(G.loanBalance)+' · 연 '+Math.round(CFG.LOAN_APR*100)+'%');
+  bankText('비상금대출 이자 '+won(interest)); BANK.loan=true;
   return interest;
 }
 function collectOwed(){ let back=Math.min(G.debt,G.money); if(back<=0) return 0; const total=back;
-  const take=(amt,label)=>{ if(amt<=0) return; G.debt-=amt; G.money-=amt; back-=amt; sms('은행',WEB+'출금 '+won(amt)+' '+label+'\n잔액 '+won(G.money)); };
+  const take=(amt,label)=>{ if(amt<=0) return; G.debt-=amt; G.money-=amt; back-=amt; bankText('출금 '+won(amt)+' '+label); };
   const r=Math.min(G.rentOwed,back); G.rentOwed-=r; take(r,'월세 미납분');
   const b=Math.min(G.billOwed,back); G.billOwed-=b; take(b,'미납 요금');
-  const l=Math.min(G.loanBalance,back); G.loanBalance-=l; take(l,'대출 상환');
+  const l=Math.min(G.loanBalance,back); G.loanBalance-=l; take(l,'대출 상환'); if(l>0) BANK.loan=true;
   return total-back; }
 function settleMorning(showFx=true){
   const c=CUT; if(!c||c.paid) return; c.paid=true;
@@ -3964,14 +4010,15 @@ function settleMorning(showFx=true){
   if(n%CFG.WEEK===0){ if(!G.weekMiss) weekly=CFG.WEEKLY_PAY; G.weekMiss=0; }
   if(!worked) sms('근무 알림',WEB+(G.monthMiss>1?'이번 달 미출근 '+G.monthMiss+'회째입니다.':'출근 확정 후 미출근 처리되었습니다.')+'\n미출근이 반복되면 이후 근무 배정 우선순위가 낮아질 수 있습니다.');
   if(docked) sms('근무 알림',WEB+'출근 '+c.clockIn+' 지각 처리되었습니다.');
+  BANK.lines=[]; BANK.loan=false; BANK.note=''; const later=[];
   const income=pay+weekly;
-  if(income){ G.money+=income; sms('은행',WEB+'입금 '+won(income)+(weekly?(pay?' 급여·주휴수당':' 주휴수당'):'')+'\n잔액 '+won(G.money)); }
+  if(income){ G.money+=income; bankText('입금 '+won(income)+(weekly?(pay?' 급여·주휴수당':' 주휴수당'):'')); }
   if(md===CFG.RENT_DAY&&n>0) accrueLoanInterest();
   let out=collectOwed();
   if(G.rentOwed<=0) G.evictDue=-1;
   else if(G.evictDue>=0&&n>=G.evictDue){
     G.evicted=true;
-    sms('집주인','월세 미납 기한이 지났습니다.\n계약 해지하겠습니다. 방 정리해 주세요.');
+    later.push(['집주인','월세 미납 기한이 지났습니다.\n계약 해지하겠습니다. 방 정리해 주세요.']); flushMorningTexts(later);
     c.debtFloat=out; c.debtFloatAt=c.t+0.65; if(!showFx) c.debtShown=true; hudDirty=true; return;
   }
   if(showFx&&income>0){ SFX.coin(); if(weekly) SFX.bonus(); floatMoney('+'+won(income),'plus'); }
@@ -3980,18 +4027,21 @@ function settleMorning(showFx=true){
     const {paid,owed}=payBill(CFG.RENT,'월세','rent'); out+=paid;
     if(G.rentOwed>0){
       if(G.evictDue<0) G.evictDue=n+3;
-      sms('집주인','월세 미납액 '+won(G.rentOwed)+' 확인 부탁드립니다.\n3일 안에 정리해 주세요.');
+      later.push(['집주인','월세 미납액 '+won(G.rentOwed)+' 확인 부탁드립니다.\n3일 안에 정리해 주세요.']);
     } else G.evictDue=-1;
     // the one saving there is: a few won a month toward a flat of his own, if anything is left once the rent is out
-    if(G.money>=CFG.SAVE){ G.money-=CFG.SAVE; out+=CFG.SAVE; G.saveN++; sms('은행',WEB+'출금 '+won(CFG.SAVE)+' 주택청약\n잔액 '+won(G.money)); }
-    else { G.saveMiss++; sms('은행',WEB+'주택청약 '+won(CFG.SAVE)+'\n잔액 부족으로 출금되지 않았습니다.'); }
+    if(G.money>=CFG.SAVE){ G.money-=CFG.SAVE; out+=CFG.SAVE; G.saveN++; bankText('출금 '+won(CFG.SAVE)+' 주택청약'); }
+    else { G.saveMiss++; bankText('주택청약 '+won(CFG.SAVE)+' 잔액 부족으로 출금되지 않았습니다.'); }
     G.monthMiss=0;
   }
   if(md===(CFG.RENT_DAY+1)%CFG.MONTH&&n>(CFG.RENT_DAY||CFG.MONTH)&&(G.monthBuys||G.monthTaxiN||G.monthClean)){
-    sms('카드',WEB+'지난달 이용 내역'+(G.monthBuys?'\n배달·편의점 '+G.monthBuys+'건 '+won(G.monthFood):'')+(G.monthTaxiN?'\n택시 '+G.monthTaxiN+'건 '+won(G.monthTaxi):'')+(G.monthClean?'\n청소 대행 '+won(G.monthClean):''));
+    later.push(['카드',WEB+'지난달 이용 내역'+(G.monthBuys?'\n배달·편의점 '+G.monthBuys+'건 '+won(G.monthFood):'')+(G.monthTaxiN?'\n택시 '+G.monthTaxiN+'건 '+won(G.monthTaxi):'')+(G.monthClean?'\n청소 대행 '+won(G.monthClean):'')]);
     G.monthFood=0; G.monthBuys=0; G.monthTaxi=0; G.monthTaxiN=0; G.monthClean=0; }
   if(md===CFG.PHONE_DAY&&n>0) out+=payBill(CFG.PHONE_BILL,'휴대폰 요금','bill').paid;
   if(md===CFG.UTIL_DAY&&n>0) out+=payBill(Math.round(rand(CFG.UTIL[0],CFG.UTIL[1])/10)*10,'도시가스·전기','bill').paid;
+  // the rent reminder three days ahead goes at the end of the same text (startRound sends it only if this didn't)
+  if(md===(CFG.RENT_DAY+CFG.MONTH-3)%CFG.MONTH&&G.remindDay!==n){ G.remindDay=n; BANK.note='3일 뒤 월세 '+won(CFG.RENT)+' 자동이체 예정입니다.'; }
+  flushMorningTexts(later);
   // everything that went straight back out shows as one minus under the pay
   c.debtFloat=out; c.debtFloatAt=c.t+0.65; if(!showFx) c.debtShown=true;
   hudDirty=true;
@@ -4432,17 +4482,29 @@ function updTearBubble(t){
 }
 // 눈물이 떨어진 뒤 쪼그만 내가 옆으로 걸어와 머리를 보고 "찌질이"
 const jjiBubble=document.createElement('div'); jjiBubble.className='badge speech'; jjiBubble.style.cssText='font-size:16px;font-weight:800;padding:4px 12px;display:none'; jjiBubble.textContent='찌질이'; labelsEl.appendChild(jjiBubble);
-const MINI={t0:2.3,x0:0.64,x1:0.4,z:-0.2,walk:1.0,say:3.55,sayEnd:5.3};
+const MINI={t0:2.3,x0:0.64,x1:0.4,xMin:0.22,z:-0.2,walk:1.0,say:3.55,sayEnd:5.3};
+// Where it stops: beside the head on the pillow, at x1 when that is in view. An upright phone or tablet shows less
+// to the side of the head, so there it stops closer in, where it and its bubble are on screen; it still walks the
+// same way in from the right, from just out of view.
+function miniStops(){
+  camera.updateMatrixWorld();
+  // its far side (an arm's width out from the middle) must stay a little inside the right edge, at any screen size
+  const z=MINI.z, edge=window.innerWidth-14, sx=x=>scrX(x+0.06,groundY(x,z)+0.06,z);
+  let x1=MINI.x1;
+  if(sx(x1)>edge){ let lo=MINI.xMin, hi=x1; for(let i=0;i<16;i++){ const m=(lo+hi)/2; if(sx(m)>edge) hi=m; else lo=m; } x1=lo; }
+  return {x1,x0:x1+(MINI.x0-MINI.x1)};
+}
 function updMini(c,t,dt){
   if(t<MINI.t0){ jjiBubble.style.display='none'; return; }
   if(!c.mini){
     if(EN.list.length>=EN.max){ let far=null; for(const e of EN.list){ if(!far||e.z<far.z) far=e; } if(far) removeEnemy(far); }
-    c.mini=spawnEnemy({x:MINI.x0,z:MINI.z,state:'walk',speed:0.2}); if(!c.mini) return;
+    c.stops=miniStops();
+    c.mini=spawnEnemy({x:c.stops.x0,z:MINI.z,state:'walk',speed:0.2}); if(!c.mini) return;
     c.mini.yaw=-Math.PI/2; if(c.mini.bubble){ c.mini.bubble.remove(); c.mini.bubble=null; }
   }
-  const e=c.mini, u=clamp((t-MINI.t0)/MINI.walk,0,1);
-  if(u<1){ e.state='walk'; e.x=lerp(MINI.x0,MINI.x1,easeOut(u)); e.z=MINI.z; e.anim+=dt*40*(1-u*0.6); e.yaw=-Math.PI/2; }
-  else { e.state='dead'; e.x=MINI.x1; e.z=MINI.z; const k=clamp((t-MINI.t0-MINI.walk)/0.3,0,1); e.yaw=lerp(-Math.PI/2,-Math.PI/2+0.75,easeOut(k)); }
+  const e=c.mini, u=clamp((t-MINI.t0)/MINI.walk,0,1), {x0,x1}=c.stops;
+  if(u<1){ e.state='walk'; e.x=lerp(x0,x1,easeOut(u)); e.z=MINI.z; e.anim+=dt*40*(1-u*0.6); e.yaw=-Math.PI/2; }
+  else { e.state='dead'; e.x=x1; e.z=MINI.z; const k=clamp((t-MINI.t0-MINI.walk)/0.3,0,1); e.yaw=lerp(-Math.PI/2,-Math.PI/2+0.75,easeOut(k)); }
   e.y=groundY(e.x,e.z);
   if(t>=MINI.say&&!c.jji){ c.jji=true; TTS.say('찌질이',{rate:1.3,pitch:2,alt:true}); SFX.heuk(0.05); }
   if(t<MINI.say||t>MINI.sayEnd){ jjiBubble.style.display='none'; return; }
@@ -4506,18 +4568,8 @@ function clearBubbles(hard=false){
   for(let i=bubbles.length-1;i>=0;i--) dropBubble(i,hard);
 }
 
-function showEnemyLine(e,text,o={}){
-  if(!e||!e.alive||G.scene!=='play') return;
-  const old=bubbles.findIndex(b=>b.e===e); if(old>=0) dropBubble(old,true);
-  else if(e.bubble){ e.bubble.remove(); e.bubble=null; }
-  const voice=animalTalk(text,{speed:o.speed||1.08,pitch:o.pitch||520,formant:o.formant||1.2,gain:o.gain||0.021});
-  const el=document.createElement('div'); el.className='badge speech chatter'; el.style.transform='translate(-50%,-100%)'; el.style.fontSize='13px'; el.style.fontWeight='900'; el.dataset.full=text; el.innerHTML='<span class="chatterText"></span>'; el.setAttribute('aria-label',text); labelsEl.appendChild(el);
-  const life=Math.max(o.life||1,voice.total+0.35), b={e,el,text,typed:el.firstElementChild,steps:voice.steps,next:0,age:voice.t0==null?0:AC.currentTime-voice.t0,t:life,life,voice,forced:true};
-  e.bubble=el; bubbles.push(b);
-}
-
 function updateBubbles(dt){
-  const placed=[];
+  const placed=[], hudBottom=bubbles.length?hudBottomPx():0;
   for(let i=bubbles.length-1;i>=0;i--){
     const b=bubbles[i];
 
@@ -4531,7 +4583,7 @@ function updateBubbles(dt){
       G.scene!=='play'||
       b.t<=0||
       !b.e.alive||
-      (b.forced?(b.e.state==='dead'||b.e.state==='leave'||b.e.state==='enter'):b.e.state!=='walk')
+      b.e.state!=='walk'
     ){
       dropBubble(i);
       continue;
@@ -4548,12 +4600,14 @@ function updateBubbles(dt){
 
     const bw=b.el.offsetWidth, bh=b.el.offsetHeight;
     const wantedX=scr.x, wantedBottom=scr.y-8;
-    const choices=[wantedX,wantedX-bw*0.75,wantedX+bw*0.75].map(x=>clamp(x,12+bw/2,window.innerWidth-12-bw/2));
-    let bx=choices[0], bottom=wantedBottom, best=Infinity;
+    const sx=k=>clamp(wantedX+bw*k,12+bw/2,window.innerWidth-12-bw/2);
     const overlap=(x,y,r)=>x-bw/2<r.right&&x+bw/2>r.left&&y-bh<r.bottom&&y>r.top;
-    for(const x of choices){ const n=placed.reduce((sum,r)=>sum+(overlap(x,bottom,r)?1:0),0); if(n<best){ best=n; bx=x; } }
-    let guard=0; while(placed.some(r=>overlap(bx,bottom,r))&&guard++<3) bottom-=bh+6;
-    bottom=clamp(bottom,bh+8,window.innerHeight-8);
+    // above the head, else a little to the side, else stacked higher, but never up over the money and the tears at
+    // the top; where that leaves no room (by the door on a short screen) they go further to the side under them
+    const minB=hudBottom+bh+4, maxB=window.innerHeight-8;
+    let bx=sx(0), bottom=clamp(wantedBottom,minB,maxB), best=Infinity;
+    search: for(const ks of [[0,-0.75,0.75],[-1.5,1.5]]) for(let k=0;k<4;k++){ const y=clamp(wantedBottom-k*(bh+6),minB,maxB);
+      for(const x of ks.map(sx)){ const n=placed.reduce((sum,r)=>sum+(overlap(x,y,r)?1:0),0); if(n<best){ best=n; bx=x; bottom=y; if(!n) break search; } } }
 
     b.el.style.left=bx+'px';
     b.el.style.top=bottom+'px';
@@ -4776,7 +4830,7 @@ function placementRadius(f){ return Math.max(0.04,f.foot*0.72); }
 function makeGhost(id){ const g=new THREE.Group(); const m=buildFood(id,true); m.traverse(o=>{ if(o.isMesh){ o.material=M.ghostOk; o.castShadow=false; o.receiveShadow=false; } }); g.add(m); g.userData.model=m; const f=FOOD_BY[id]; const ring=new THREE.Mesh(new THREE.RingGeometry(f.range-0.012,f.range,64),new THREE.MeshBasicMaterial({color:0x2FD06B,transparent:true,opacity:0.55,depthWrite:false,side:THREE.DoubleSide})); ring.rotation.x=-Math.PI/2; ring.position.y=0.006; g.add(ring); g.userData.ring=ring; const foot=new THREE.Mesh(new THREE.CircleGeometry(placementRadius(f),32),new THREE.MeshBasicMaterial({color:0x2FD06B,transparent:true,opacity:0.22,depthWrite:false})); foot.rotation.x=-Math.PI/2; foot.position.y=0.005; g.add(foot); g.userData.foot=foot; return g; }
 let ghostWhy='', ghostPlaceX=0, ghostPlaceZ=0, tipHoldT=0;
 const ghostTip=document.createElement('div'); ghostTip.className='badge speech'; ghostTip.style.cssText='font-size:13px;font-weight:800;padding:4px 10px;color:#E23744;display:none'; labelsEl.appendChild(ghostTip);
-function showTip(txt,x,z){ if(!txt){ ghostTip.style.display='none'; return; } ghostTip.textContent=txt; ghostTip.style.display='block'; projectTo(x,groundY(x,z)+0.24,z,scr); const bw=ghostTip.offsetWidth, bx=clamp(scr.x,12+bw/2,window.innerWidth-12-bw/2); ghostTip.style.left=bx+'px'; ghostTip.style.top=Math.max(ghostTip.offsetHeight+8,scr.y-6)+'px'; ghostTip.style.setProperty('--tail',clamp(scr.x-bx+bw/2,8,bw-8)+'px'); }
+function showTip(txt,x,z){ if(!txt){ ghostTip.style.display='none'; return; } ghostTip.textContent=txt; ghostTip.style.display='block'; projectTo(x,groundY(x,z)+0.24,z,scr); const bw=ghostTip.offsetWidth, bx=clamp(scr.x,12+bw/2,window.innerWidth-12-bw/2); ghostTip.style.left=bx+'px'; ghostTip.style.top=Math.max(hudBottomPx()+ghostTip.offsetHeight+4,scr.y-6)+'px'; ghostTip.style.setProperty('--tail',clamp(scr.x-bx+bw/2,8,bw-8)+'px'); }
 
 function moveGhost(pt,id){
   if(!ghost||ghostId!==id){ hideGhost(); ghost=makeGhost(id); ghostId=id; scene.add(ghost); }
@@ -4850,8 +4904,10 @@ function setAimPoint(pt){
   const t=AIM.tower; if(!t||!pt) return;
   let dx=pt.x-t.x,dz=pt.z-t.z,d=Math.hypot(dx,dz); if(d<.08){ dx=0; dz=1; d=1; }
   const len=Math.min(t.food.range,d), ux=dx/d,uz=dz/d; AIM.x=t.x+ux*len; AIM.z=t.z+uz*len;
-  const y=groundY(t.x,t.z)+.012; aimG.position.set(t.x,y,t.z); aimRing.scale.setScalar(t.food.range); aimArrow.position.set(0,.006,0); aimArrow.setDirection(new V3(ux,0,uz)); aimArrow.setLength(Math.max(.12,len),.11,.055);
-  aimLand.position.set(AIM.x,groundY(AIM.x,AIM.z)+.014,AIM.z); aimLand.scale.setScalar(t.food.id==='chicken'?2.1:1); aimLand.visible=true;
+  // a burger rolls and a pizza slice flies past the ring: the arrow shows the whole way it goes, with no landing mark
+  const through=t.food.roll||t.food.reach||0;
+  const y=groundY(t.x,t.z)+.012; aimG.position.set(t.x,y,t.z); aimRing.scale.setScalar(t.food.range); aimArrow.position.set(0,.006,0); aimArrow.setDirection(new V3(ux,0,uz)); aimArrow.setLength(Math.max(.12,through||len),.11,.055);
+  aimLand.position.set(AIM.x,groundY(AIM.x,AIM.z)+.014,AIM.z); aimLand.scale.setScalar(t.food.id==='chicken'?2.1:1); aimLand.visible=!through;
 }
 function beginAim(t,ev){
   if(!t||t.ammo<=0||t.exhausted) return false;

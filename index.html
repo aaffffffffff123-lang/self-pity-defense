@@ -3822,10 +3822,6 @@ function updPlay(dt){
   }
   updateDanger(dt);
   if(G.tear>=1){ G.tear=1; startCry(); return; }
-  let walkers=0; for(const e of EN.list) if(e.state==='walk') walkers++;
-  // Only the crowd already in the room can make a sound. No arrival cue.
-  if(walkers>0&&Math.random()<Math.min(0.55,walkers*0.012)*dt*10){ Math.random()<0.55?SFX.sniff(0.03+Math.min(0.03,walkers*0.0004)):SFX.heuk(0.024); }
-
   if(allSpawned()){
     const alive=EN.list.filter(e=>e.alive&&e.state!=='leave').length;
     if(alive===0&&projs.length===0){ startHush(); }

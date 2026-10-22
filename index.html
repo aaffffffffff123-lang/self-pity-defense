@@ -1500,6 +1500,7 @@ function drawEye(E, st){
   if(E.side>0){ g.translate(W,0); g.scale(-1,1); }
   const cx=126, cy=108, hw=86, top=cy-38, bot=cy+34;
   const sq=st.squeeze||0, red=st.red||0, fl=clamp((st.flush||0)/0.6,0,1), skin=`rgb(242,${Math.round(189-30*fl)},${Math.round(148-26*fl)})`, skin2=`rgb(237,${Math.round(181-30*fl)},${Math.round(140-26*fl)})`, tear=st.tear, blink=Math.max(st.blink,st.flinch||0,sq), fat=st.fat, t=st.t, rage=st.rage||0, impact=st.impact||0, hitSide=st.hitSide||0, woe=st.woe||0, wide=st.wide||0;
+  const fury=clamp((rage-0.45)/0.75,0,1);
   // socket shading (it goes red around red eyes) + eye bag
   let gr=g.createRadialGradient(cx,cy+6,20,cx,cy+6,110); gr.addColorStop(0,`rgba(${Math.round(165+50*red)},${Math.round(72-22*red)},${Math.round(68-12*red)},${0.28+rage*0.22+red*0.2})`); gr.addColorStop(1,'rgba(150,95,80,0)'); g.fillStyle=gr; ell(g,cx,cy+6,118,84); g.fill();
   const dk=st.dark||0; g.fillStyle=`rgba(${120-dk*40},${80-dk*30},${120-dk*10},${0.22+fat*0.12+dk*0.34})`; ell(g,cx+4,cy+50+fat*6+dk*3,76+dk*8,16+fat*8+dk*9); g.fill();
@@ -1538,13 +1539,14 @@ function drawEye(E, st){
   // lids. A blink drops the upper lid to the bottom; a squeeze shuts the eye higher up, the lower lid pushed up into it
   const open=1-fat*0.12, lidBase=top+(bot-top)*0.36*(1/open>1?1:1)+fat*6;
   const closeY=lerp(bot+12,cy+6,sq), lidY=lerp(lidBase-wide*26+rage*16+impact*5,closeY,blink), lowY=lerp(bot+14,closeY+2,sq);
-  g.fillStyle=skin; g.beginPath(); g.moveTo(cx-hw-12,top-30); g.lineTo(cx+hw+12,top-30); g.lineTo(cx+hw+12,lidY-6); g.quadraticCurveTo(cx+10,lidY+7-10*sq,cx-hw-12,lidY-2); g.closePath(); g.fill();
-  g.strokeStyle='rgba(120,70,60,.35)'; g.lineWidth=6; g.beginPath(); g.moveTo(cx-hw-10,lidY+4); g.quadraticCurveTo(cx+10,lidY+13-10*sq,cx+hw+10,lidY); g.stroke();
+  const furyOpen=fury*(1-0.45*clamp(blink,0,1)), lidOuter=lidY-9*furyOpen, lidInner=lidY+8*furyOpen;
+  g.fillStyle=skin; g.beginPath(); g.moveTo(cx-hw-12,top-30); g.lineTo(cx+hw+12,top-30); g.lineTo(cx+hw+12,lidInner-6); g.quadraticCurveTo(cx+10,lidY+7-10*sq,cx-hw-12,lidOuter-2); g.closePath(); g.fill();
+  g.strokeStyle='rgba(120,70,60,.35)'; g.lineWidth=6; g.beginPath(); g.moveTo(cx-hw-10,lidOuter+4); g.quadraticCurveTo(cx+10,lidY+13-10*sq,cx+hw+10,lidInner); g.stroke();
   if(sq>0.02){ g.fillStyle=skin2; g.beginPath(); g.moveTo(cx-hw-12,bot+30); g.lineTo(cx-hw-12,lowY+4); g.quadraticCurveTo(cx-4,lowY-8*sq,cx+hw+12,lowY); g.lineTo(cx+hw+12,bot+30); g.closePath(); g.fill(); }
   g.restore();
   // lash line & lower lid (red rims on red eyes)
-  g.lineCap='round'; g.strokeStyle='#2A1F1D'; g.lineWidth=7+5*sq; g.beginPath(); g.moveTo(cx-hw-2,lidY+1); g.quadraticCurveTo(cx+10,lidY+10-12*sq,cx+hw+2,lidY-3); g.stroke();
-  if(red>0.05&&blink<0.9){ g.strokeStyle=`rgba(205,52,60,${0.55*red*(1-blink)})`; g.lineWidth=3; g.beginPath(); g.moveTo(cx-hw+8,lidY+7); g.quadraticCurveTo(cx+10,lidY+15,cx+hw-6,lidY+3); g.stroke(); }
+  g.lineCap='round'; g.strokeStyle='#2A1F1D'; g.lineWidth=7+5*sq+2*fury; g.beginPath(); g.moveTo(cx-hw-2,lidOuter+1); g.quadraticCurveTo(cx+10,lidY+10-12*sq,cx+hw+2,lidInner-3); g.stroke();
+  if(red>0.05&&blink<0.9){ g.strokeStyle=`rgba(205,52,60,${0.55*red*(1-blink)})`; g.lineWidth=3; g.beginPath(); g.moveTo(cx-hw+8,lidOuter+7); g.quadraticCurveTo(cx+10,lidY+15,cx+hw-6,lidInner+3); g.stroke(); }
   g.strokeStyle=`rgba(80,45,40,${0.55+rage*0.28})`; g.lineWidth=3+rage*2; g.beginPath(); g.moveTo(cx-hw+6,cy+8-rage*2); g.bezierCurveTo(cx-40,lowY-8-rage*12,cx+62,lowY-6-rage*12,cx+hw-6,cy+2-rage*2); g.stroke();
   if(red>0.05){ g.strokeStyle=`rgba(212,58,64,${0.6*red})`; g.lineWidth=3.5; g.beginPath(); g.moveTo(cx-hw+12,cy+12-rage*2); g.bezierCurveTo(cx-40,lowY-4-rage*12,cx+62,lowY-2-rage*12,cx+hw-10,cy+6-rage*2); g.stroke(); }
   if(tear>0.85 && blink<0.2){ const k=(tear-0.85)/0.15; g.fillStyle=`rgba(140,215,255,${0.4+k*0.5})`; g.beginPath(); g.ellipse(cx,bot+2,hw*0.82,4+k*7,0,0,Math.PI); g.fill(); g.strokeStyle='rgba(255,255,255,.8)'; g.lineWidth=2; g.stroke(); }
@@ -1561,8 +1563,14 @@ function drawEye(E, st){
     for(let j=0;j<3;j++){ const y=cy+30+j*13; g.beginPath(); g.moveTo(cx+hw+6,y); g.quadraticCurveTo(cx+hw+20,y-4,cx+hw+34,y+3); g.stroke(); }
   }
   // brows. rage: the inner end drives down; woe: the inner end climbs; wide: the whole brow goes up; squeeze: crushed down
-  const bo=lerp(44,24,rage)+woe*12-wide*8+12*sq, bi=lerp(30,58,rage)-woe*24-wide*10+28*sq, bib=lerp(40,66,rage)-woe*20-wide*8+27*sq, bob=lerp(58,36,rage)+woe*10-wide*8+10*sq;
+  const bo=lerp(44,24,rage)+woe*12-wide*8+12*sq-5*fury, bi=lerp(30,58,rage)-woe*24-wide*10+28*sq+10*fury, bib=lerp(40,66,rage)-woe*20-wide*8+27*sq+8*fury, bob=lerp(58,36,rage)+woe*10-wide*8+10*sq-2*fury;
   g.fillStyle='#231E1D'; g.beginPath(); g.moveTo(cx-hw-6,bo); g.quadraticCurveTo(cx-20,lerp(26,38,rage)-woe*2-wide*10+10*sq,cx+hw-4,bi); g.lineTo(cx+hw-6,bib); g.quadraticCurveTo(cx-20,lerp(42,48,rage)+woe*2-wide*8+10*sq,cx-hw-2,bob); g.closePath(); g.fill();
+  // heavy orbital and glabellar folds: the whole brow ridge crushes down, rather than a cute V-shaped angry face
+  if(fury>0.02){
+    g.lineCap='round'; g.strokeStyle=`rgba(92,37,31,${0.5+0.28*fury})`; g.lineWidth=5+2.5*fury;
+    for(const d of [0,12]){ g.beginPath(); g.moveTo(cx+hw+7+d,bi-20-d*0.2); g.bezierCurveTo(cx+hw-1+d*0.35,bi-3,cx+hw-7+d*0.18,bi+20,cx+hw-3+d*0.08,bi+37); g.stroke(); }
+    g.strokeStyle=`rgba(103,45,36,${0.38+0.28*fury})`; g.lineWidth=4+2*fury; g.beginPath(); g.moveTo(cx-hw+10,bo-7); g.bezierCurveTo(cx-34,bo-23,cx+20,bi-20,cx+hw-11,bi-9); g.stroke();
+  }
   // the knot between the brows
   const knot=Math.max(sq,rage*0.75);
   if(knot>0.05){ g.strokeStyle=`rgba(104,46,38,${0.72*knot})`; g.lineWidth=5.6; for(const [x0,x1] of [[cx+hw+10,cx+hw+6],[cx+hw+24,cx+hw+22]]){ g.beginPath(); g.moveTo(x0,bi-2); g.quadraticCurveTo(x0+4,bi+16,x1,bi+34); g.stroke(); } }
@@ -3431,10 +3439,11 @@ function ultPose(t){
   if(t>=F.Fc&&t<F.Fc+0.2){ const fi=(t-F.Fc)/0.04*Math.exp(1-(t-F.Fc)/0.04); if(fi>impact){ impact=fi; side=1; } }
   f.squeeze=squeeze; f.flinch=0;
   f.clench=t<F.hold?Math.min(1,t/0.22):Math.max(0,1-(t-F.hold)/0.18);
-  f.rage=clamp((t-0.38)/0.22,0,1)*lerp(0.95,0.75,prog)*(t<F.hold?1:Math.max(0,1-(t-F.hold)/0.3));
+  const rageOut=t<F.hold?1:Math.max(0,1-(t-F.hold)/0.22);
+  f.rage=clamp((t-0.18)/0.18,0,1)*lerp(1.28,1.12,prog)*rageOut;
   f.red=Math.max(f.red||0,clamp(0.4+0.1*nHit+(t>=F.Fc?0.2:0),0,1));
   f.flush=Math.max(f.flush||0,clamp(t/0.5,0,1)*(0.22+0.05*nHit)+(t>=F.F0?0.08:0));
-  f.woe=Math.max(f.woe0||0,t<0.5?0.05:lerp(0.12,0.55,prog),t>=F.hold?clamp((t-F.hold)/0.25,0,1):0);
+  f.woe=Math.max(f.woe0||0,t<F.hold?0.025:clamp((t-F.hold)/0.25,0,1));
   f.sob=t>=F.hold?clamp((t-F.hold)/0.2,0,1)*(t<F.flop?1:clamp(1-(t-F.flop)/0.3,0,1)):0;
   f.impact=impact; f.side=side;
   f.tear=Math.max(f.tear||0,0.22+0.5*prog+(t>=F.Fc?0.25:0));
@@ -3483,7 +3492,7 @@ function updSelfHit(dt){
   while(S.fired<P.hits.length&&t>=P.hits[S.fired].t) selfHitImpact(P.hits[S.fired++]);
   if(!S.cues.back&&t>=P.F.hold+0.3){ S.cues.back=1; FLYSND.duck=0.3; }
   if(S.noseT>=0){ FACEMARK.u.uQ0.value[2].w=1; FACEMARK.u.uQB.value[2].w=clamp((t-S.noseT)/0.9,0,1); }
-  camUlt=Math.min(easeOut(clamp(t/0.42,0,1)),ease(clamp((P.end-t)/0.55,0,1)));
+  camUlt=0; // keep the normal full-room framing through the entire ultimate
   ultPose(t); GI.updSwell(dt);
   if(t<P.end) return;
   S.active=false; S.targets.length=0; S.batches.length=0; camUlt=0; if(S.noseT>=0) FACEMARK.u.uQB.value[2].w=1;

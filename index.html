@@ -396,7 +396,15 @@ const FOODS = [
 const FOOD_BY = Object.fromEntries(FOODS.map(f=>[f.id,f]));
 const CHEAPEST_FOOD = Math.min(...FOODS.map(f=>f.price));
 const MIN_LOAN_DRAW = Math.min(...CFG.LOAN_OPTIONS);
-const LINES = ['아무도 나를 안 좋아해','내 편이 아무도 없어','나도 사랑받고 싶어','너무 힘들어','아무도 몰라줘','난 외톨이야','불쌍한 나','늘 고생하는 나','나는 사랑을 주는 것에만 익숙해','난 꿈이 없어','나는 관계가 서툴러','나는 상처가 많아','나는 언제쯤 행복해질까','왜 나만 이래','나만 손해 보는 것 같아','착하게 살면 손해야','다들 날 이용만 해','내가 뭘 잘못했는데','나는 늘 뒷전이야','세상은 나한테만 가혹해','왜 나한테만 이런 일이 생겨','나만 제자리야','다들 잘 사는데 나만 이래','친구들은 다 자리 잡았는데','남들은 다 쉽게 되던데','인스타 보면 나만 불행해','다들 나보다 앞서가','나만 빼고 다 행복해 보여','연락 오는 데가 없어','먼저 연락하는 건 늘 나야','다들 나만 빼고 만나','단톡방에서 내 말만 씹혀','생일인데 아무도 몰라','주말에 만날 사람이 없어','혼자인 게 익숙해','나한테 관심 있는 사람이 없어','아무도 내 고생 몰라','나만 열심히 해','늘 양보만 했어','남들 챙기느라 나는 못 챙겼어','고맙단 말 한 번 못 들었어','나는 늘 괜찮은 척했어','내가 얼마나 참았는데','내가 얼마나 버텼는데','역시 나는 안 돼','내가 그렇지 뭐','난 원래 이런 사람이야','어차피 안 될 거야','해 봤자야','이번 생은 망했어','기대도 안 해','나 같은 게 뭘','환경이 날 이렇게 만들었어','운이 없었을 뿐이야','타이밍이 안 좋았어','나도 사정이 있었어','시작부터 달랐잖아','내 잘못이 아니야','괜찮다고 말해줘','누가 나 좀 안아줬으면','나 힘든 거 알지?','나 좀 봐줘','한 번만 내 편 들어줘','수고했다는 말 듣고 싶어','나도 위로받고 싶어','나도 누군가의 1순위이고 싶어','나는 늘 주기만 했어','상처받는 건 늘 나야','나는 왜 이렇게 여릴까','좋은 사람은 늘 상처받아','내 마음은 아무도 안 궁금해해','나를 아껴주는 사람이 없었어','힘들다','서럽다','지친다','억울해','외로워','나만 왜','쉬고 싶어','다 싫어'];
+// The enemy form is the thought pattern: early pity, comparison, grievance, then a condensed inferiority lump.
+// Weight-related lines remain a separate overlay below because the body changes along its own axis.
+const LINES_BY_KIND = {
+  pity:['아무도 나를 안 좋아해','내 편이 아무도 없어','나도 사랑받고 싶어','너무 힘들어','아무도 몰라줘','난 외톨이야','불쌍한 나','늘 고생하는 나','나는 사랑을 주는 것에만 익숙해','난 꿈이 없어','나는 관계가 서툴러','나는 상처가 많아','나는 언제쯤 행복해질까','괜찮다고 말해줘','누가 나 좀 안아줬으면','나 힘든 거 알지?','나 좀 봐줘','한 번만 내 편 들어줘','수고했다는 말 듣고 싶어','나도 위로받고 싶어','나도 누군가의 1순위이고 싶어','힘들다','서럽다','지친다','외로워','쉬고 싶어','다 싫어'],
+  compare:['나만 제자리야','다들 잘 사는데 나만 이래','친구들은 다 자리 잡았는데','남들은 다 쉽게 되던데','인스타 보면 나만 불행해','다들 나보다 앞서가','나만 빼고 다 행복해 보여','연락 오는 데가 없어','먼저 연락하는 건 늘 나야','다들 나만 빼고 만나','단톡방에서 내 말만 씹혀','생일인데 아무도 몰라','주말에 만날 사람이 없어','혼자인 게 익숙해','나한테 관심 있는 사람이 없어'],
+  wronged:['왜 나만 이래','나만 손해 보는 것 같아','착하게 살면 손해야','다들 날 이용만 해','내가 뭘 잘못했는데','나는 늘 뒷전이야','세상은 나한테만 가혹해','왜 나한테만 이런 일이 생겨','아무도 내 고생 몰라','나만 열심히 해','늘 양보만 했어','남들 챙기느라 나는 못 챙겼어','고맙단 말 한 번 못 들었어','나는 늘 괜찮은 척했어','내가 얼마나 참았는데','내가 얼마나 버텼는데','환경이 날 이렇게 만들었어','운이 없었을 뿐이야','타이밍이 안 좋았어','나도 사정이 있었어','시작부터 달랐잖아','내 잘못이 아니야','나는 늘 주기만 했어','상처받는 건 늘 나야','나는 왜 이렇게 여릴까','좋은 사람은 늘 상처받아','내 마음은 아무도 안 궁금해해','나를 아껴주는 사람이 없었어','억울해','나만 왜'],
+  lump:['역시 나는 안 돼','내가 그렇지 뭐','난 원래 이런 사람이야','어차피 안 될 거야','해 봤자야','이번 생은 망했어','기대도 안 해','나 같은 게 뭘'],
+};
+const BASE_LINE_COUNT = Object.values(LINES_BY_KIND).reduce((n,lines)=>n+lines.length,0);
 const FAT_LINES = [
   {min:0.35, lines:['먹어서 버틴 거야','스트레스 받아서 그래','먹을 때만 덜 괴로워','오늘까지만 먹자','내일부터 해야지']},
   {min:0.55, lines:['이 몸으로 누가 날 좋아해','먹는 것밖에 내 편이 없어','거울 보기 싫어','사진 찍기 싫어','내 몸이 부끄러워','옷이 다 안 맞아']},
@@ -5276,8 +5284,8 @@ function updWatchBubble(){
 // speech bubbles
 let bubbles=[];
 
-// 기본 독백은 계속 남고, 본체와 함께 살이 찔수록 체중 독백이 섞입니다.
-let lineBag=[], fatLineBag=[], lastLine='';
+// 각 형태는 자기 단계의 독백만 말하고, 본체와 함께 살이 찔수록 체중 독백이 따로 섞입니다.
+let lineBags={}, fatLineBag=[], lastLine='';
 
 function shuffled(a){
   a=a.slice();
@@ -5290,23 +5298,25 @@ function shuffled(a){
   return a;
 }
 
-function resetLineBags(){ lineBag=[]; fatLineBag=[]; lastLine=''; }
+function resetLineBags(){ lineBags={}; fatLineBag=[]; lastLine=''; }
 function currentFatLines(){ const out=[]; for(const tier of FAT_LINES) if(G.fat>=tier.min) out.push(...tier.lines); return out; }
 function pullLine(pool,kind,busy){
   if(!pool.length) return '';
-  let bag=kind==='fat'?fatLineBag:lineBag, i=bag.findIndex(l=>pool.includes(l)&&!busy.has(l));
+  let bag=kind==='fat'?fatLineBag:(lineBags[kind]||[]), i=bag.findIndex(l=>pool.includes(l)&&!busy.has(l));
   if(i<0){ bag=bag.concat(shuffled(pool)); i=bag.findIndex(l=>!busy.has(l)); }
   const out=i<0?'':bag.splice(i,1)[0];
-  if(kind==='fat') fatLineBag=bag; else lineBag=bag;
+  if(kind==='fat') fatLineBag=bag; else lineBags[kind]=bag;
   return out;
 }
-function nextLine(){
+function nextLine(kind){
+  const baseKind=LINES_BY_KIND[kind]?kind:'pity', basePool=LINES_BY_KIND[baseKind];
   const busy=new Set(bubbles.map(b=>b.text)), fatPool=currentFatLines();
-  if(LINES.length+fatPool.length>busy.size+1&&lastLine) busy.add(lastLine);
-  const fatChance=clamp(3*fatPool.length/(fatPool.length+LINES.length),0,0.55), fatFirst=fatPool.length&&Math.random()<fatChance;
-  let text=pullLine(fatFirst?fatPool:LINES,fatFirst?'fat':'base',busy);
-  if(!text) text=pullLine(fatFirst?LINES:fatPool,fatFirst?'base':'fat',busy);
-  if(!text) text=pick(LINES);
+  if(basePool.length+fatPool.length>busy.size+1&&lastLine) busy.add(lastLine);
+  // Keep the old weight-line frequency; splitting the base pool must not make it jump to the 55% cap.
+  const fatChance=clamp(3*fatPool.length/(fatPool.length+BASE_LINE_COUNT),0,0.55), fatFirst=fatPool.length&&Math.random()<fatChance;
+  let text=pullLine(fatFirst?fatPool:basePool,fatFirst?'fat':baseKind,busy);
+  if(!text) text=pullLine(fatFirst?basePool:fatPool,fatFirst?baseKind:'fat',busy);
+  if(!text) text=pick(basePool);
   return lastLine=text;
 }
 
@@ -5389,7 +5399,7 @@ function updateBubbles(dt){
 
     if(cands.length){
       const e=pick(cands);
-      const text=nextLine();
+      const text=nextLine(e.kind);
       const v=e.seed%1;
 
       const voice=animalTalk(text,{

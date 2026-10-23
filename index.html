@@ -434,7 +434,7 @@ function recordBestShift(shift){ if(shift<=bestShift) return; bestShift=shift; t
 /* =========================================================
    AUDIO
    ========================================================= */
-let AC=null, master=null, talkBus=null, noiseBuf=null, murmurG=null, murmurSrc=null;
+let AC=null, master=null, finalOut=null, ultFxBus=null, talkBus=null, noiseBuf=null, murmurG=null, murmurSrc=null;
 const ACTIVE_TRANSIENT=new Set();
 function trackTransient(src){
   ACTIVE_TRANSIENT.add(src);
@@ -462,7 +462,12 @@ function audioInit(){
     if(AC){ if(AC.state!=='running'&&!gamePaused) AC.resume(); return; }
     AC=new (window.AudioContext||window.webkitAudioContext)();
     const comp=AC.createDynamicsCompressor(); comp.threshold.value=-14; comp.ratio.value=4; comp.attack.value=0.003; comp.release.value=0.18;
-    master=AC.createGain(); master.gain.value=muted?0:0.85; master.connect(comp); comp.connect(AC.destination);
+    finalOut=AC.createGain(); finalOut.gain.value=muted?0:1; finalOut.connect(AC.destination);
+    master=AC.createGain(); master.gain.value=0.85; master.connect(comp); comp.connect(finalOut);
+    // Keep the non-impact ultimate FX away from the punch-driven compressor.
+    // 1.70 is an actual +6 dB against the normal 0.85 path; its own limiter only catches peaks.
+    const ultComp=AC.createDynamicsCompressor(); ultComp.threshold.value=-3; ultComp.knee.value=4; ultComp.ratio.value=8; ultComp.attack.value=0.002; ultComp.release.value=0.11;
+    ultFxBus=AC.createGain(); ultFxBus.gain.value=1.70; ultFxBus.connect(ultComp); ultComp.connect(finalOut);
     talkBus=AC.createGain(); talkBus.gain.value=1; talkBus.connect(master);
     noiseBuf=AC.createBuffer(1,AC.sampleRate*2,AC.sampleRate); const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
     murmurG=AC.createGain(); murmurG.gain.value=0; murmurG.connect(master);
@@ -726,7 +731,7 @@ function stopAllAnimalTalk(hard=false){
 
 const sndBtn=$('sndBtn');
 function setMuted(m){ muted=m; sndBtn.classList.toggle('off',m); sndBtn.setAttribute('aria-label',m?'소리 켜기':'소리 끄기'); sndBtn.title=m?'소리 켜기 (M)':'소리 끄기 (M)';
-  if(AC&&master) master.gain.setTargetAtTime(m?0:0.85,AC.currentTime,0.02);
+  if(AC&&finalOut) finalOut.gain.setTargetAtTime(m?0:1,AC.currentTime,0.02);
   if(m){ stopAllAnimalTalk(true); if(TTS.ok){ try{ speechSynthesis.cancel(); }catch(e){} } }
   else if(AC&&AC.state!=='running'&&AC.state!=='closed'&&!document.hidden&&!gamePaused){ try{ const p=AC.resume(); if(p&&p.catch) p.catch(()=>{}); }catch(e){} } }
 sndBtn.addEventListener('click',ev=>{ ev.stopPropagation(); setMuted(!muted); });
@@ -946,28 +951,28 @@ const SFX={
     for(const [f,w,g] of [[1318.5,0.04,0.045],[1975.5,0.07,0.04],[2637,0.1,0.034],[3951,0.13,0.022]]) tn({type:'triangle',f,g,dur:0.95,a:0.006,when:w});   // bright shimmer
     for(let i=0;i<7;i++) nz({type:'highpass',f:3200,q:0.7,g:rand(0.034,0.075),dur:0.012,a:0.0006,when:0.08+i*rand(0.035,0.07)}); },   // crackle
   ultFire(){ if(!AC) return;
-    tn({type:'sine',f:92,f2:30,g:0.646,dur:0.6,a:0.003});
-    nz({type:'lowpass',f:2600,f2:140,q:0.8,g:0.51,dur:0.52,a:0.003});
-    nz({type:'bandpass',f:900,f2:320,q:0.7,g:0.238,dur:0.62,a:0.03});
-    nz({type:'highpass',f:5200,q:0.7,g:0.15,dur:0.14,a:0.001}); },
+    tn({type:'sine',f:92,f2:30,g:0.646,dur:0.6,a:0.003,out:ultFxBus});
+    nz({type:'lowpass',f:2600,f2:140,q:0.8,g:0.51,dur:0.52,a:0.003,out:ultFxBus});
+    nz({type:'bandpass',f:900,f2:320,q:0.7,g:0.238,dur:0.62,a:0.03,out:ultFxBus});
+    nz({type:'highpass',f:5200,q:0.7,g:0.15,dur:0.14,a:0.001,out:ultFxBus}); },
   // A shamelessly heroic score laid over the miserable act itself: open fifths, a rising fanfare and a final chord.
   ultHeroStart(){ if(!AC) return;
-    tn({type:'sine',f:55,f2:41,g:0.84,dur:0.72,a:0.012});
+    tn({type:'sine',f:55,f2:41,g:0.42,dur:0.72,a:0.012,out:ultFxBus});
     [[146.83,0],[220,0.105],[293.66,0.21],[440,0.315]].forEach(([f,w],i)=>{
-      tn({type:'triangle',f,f2:f*1.008,g:0.22-i*0.024,dur:0.7,a:0.012,when:w,lp:3600});
-      tn({type:'sine',f:f/2,g:0.11,dur:0.72,a:0.018,when:w});
+      tn({type:'triangle',f,f2:f*1.008,g:0.11-i*0.012,dur:0.7,a:0.012,when:w,lp:3600,out:ultFxBus});
+      tn({type:'sine',f:f/2,g:0.055,dur:0.72,a:0.018,when:w,out:ultFxBus});
     });
-    nz({type:'highpass',f:2800,f2:7200,q:0.65,g:0.16,dur:0.62,a:0.16}); },
+    nz({type:'highpass',f:2800,f2:7200,q:0.65,g:0.08,dur:0.62,a:0.16,out:ultFxBus}); },
   ultHeroHit(n){ if(!AC) return; const notes=[293.66,369.99,440,493.88,587.33,739.99], f=notes[n%notes.length];
-    tn({type:'triangle',f,f2:f*1.006,g:0.19,dur:0.34,a:0.004,lp:4200});
-    tn({type:'sine',f:f/2,g:0.09,dur:0.3,a:0.003}); },
+    tn({type:'triangle',f,f2:f*1.006,g:0.095,dur:0.34,a:0.004,lp:4200,out:ultFxBus});
+    tn({type:'sine',f:f/2,g:0.045,dur:0.3,a:0.003,out:ultFxBus}); },
   ultHeroRise(){ if(!AC) return;
-    tn({type:'sawtooth',f:196,f2:783.99,g:0.18,dur:0.515,a:0.13,lp:3200,q:1.1});
-    nz({type:'highpass',f:1400,f2:7600,q:0.8,g:0.26,dur:0.515,a:0.22}); },
+    tn({type:'sawtooth',f:196,f2:783.99,g:0.09,dur:0.515,a:0.13,lp:3200,q:1.1,out:ultFxBus});
+    nz({type:'highpass',f:1400,f2:7600,q:0.8,g:0.13,dur:0.515,a:0.22,out:ultFxBus}); },
   ultHeroFinal(){ if(!AC) return;
-    [[146.83,0.3],[220,0.21],[293.66,0.18],[369.99,0.15]].forEach(([f,g],i)=>tn({type:i?'triangle':'sine',f,f2:f*0.997,g,dur:1.55,a:0.008,lp:4600}));
-    tn({type:'sine',f:73.42,f2:36.71,g:0.72,dur:0.8,a:0.004});
-    nz({type:'highpass',f:4200,f2:10500,q:0.55,g:0.36,dur:0.9,a:0.02}); },
+    [[146.83,0.15],[220,0.105],[293.66,0.09],[369.99,0.075]].forEach(([f,g],i)=>tn({type:i?'triangle':'sine',f,f2:f*0.997,g,dur:1.55,a:0.008,lp:4600,out:ultFxBus}));
+    tn({type:'sine',f:73.42,f2:36.71,g:0.36,dur:0.8,a:0.004,out:ultFxBus});
+    nz({type:'highpass',f:4200,f2:10500,q:0.55,g:0.18,dur:0.9,a:0.02,out:ultFxBus}); },
   // ---- ultimate: punching my own face ----
   // A fist on a cheekbone ("퍽"): knuckles knocking on bone, a short flesh thud, and the head knocked into the
   // pillow under it; a dull, meaty blow rather than a film crack. Panned to the fist.
@@ -982,7 +987,7 @@ const SFX={
     for(let i=0;i<4;i++) nz({type:'bandpass',f:rand(1700,2900),q:2.2,g:1.6,dur:0.016,a:0.0005,pan:side*0.3,when:0.004+i*rand(0.006,0.011)});
     nz({type:'lowpass',f:260,f2:70,q:0.8,g:2.4,dur:0.3,a:0.003}); tn({type:'sine',f:70,f2:34,g:0.6,dur:0.3,a:0.004}); },
   // the fist cutting the air on its way in
-  whoosh(side,k,dur){ if(!AC) return; dur=dur||0.1; nz({type:'bandpass',f:420,f2:2300,q:1.5,g:0.09+0.1*k,dur,a:dur*0.78,pan:side*0.6,rate:0.9}); },
+  whoosh(side,k,dur){ if(!AC) return; dur=dur||0.1; nz({type:'bandpass',f:420,f2:2300,q:1.5,g:0.09+0.1*k,dur,a:dur*0.78,pan:side*0.6,rate:0.9,out:ultFxBus}); },
   // the high whine in the ears after the last one
   earRing(){ if(!AC) return; tn({type:'sine',f:3350,g:0.006,dur:1.9,a:0.06,when:0.05}); tn({type:'sine',f:3355*1.5,g:0.0016,dur:1.3,a:0.08,when:0.05}); },
   // 스르릉-챙 with the title glint, starting `at` seconds from now; a new one cuts the last one off.

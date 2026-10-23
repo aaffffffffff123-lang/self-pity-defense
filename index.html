@@ -211,7 +211,6 @@ body.gamePaused #app *,body.gamePaused #app *::before,body.gamePaused #app *::af
 @keyframes lgWave{from{transform:skewY(-4deg) scaleX(.94)}to{transform:skewY(5deg) scaleX(1.04)}}
 @keyframes lgGlint{0%{transform:skewX(-20deg) translateX(0)}45%,100%{transform:skewX(-20deg) translateX(560px)}}
 .titleBox .btn{font-size:21px;padding:13px 40px;border-radius:16px;box-shadow:0 5px 0 rgba(36,32,30,.35)}
-.titleGoal{margin:-2px 0 8px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.92);box-shadow:0 2px 0 rgba(36,32,30,.12);font-size:14px;font-weight:900;color:var(--ink)}
 
 
 
@@ -253,7 +252,7 @@ body.gamePaused #app *,body.gamePaused #app *::before,body.gamePaused #app *::af
 <div id="overlay"></div>
 <button id="cutSkip" type="button" aria-label="출근 장면 건너뛰기" aria-hidden="true" disabled>출근 건너뛰기 ›</button>
 <button id="cleanBtn" type="button" aria-label="집청소 부르기"><span class="cl1">집청소</span><span class="cl2"></span></button>
-<div id="loanWrap" aria-hidden="true"><button id="loanBtn" type="button" aria-label="대출 금액 선택" aria-expanded="false"><span class="ln1">대출</span><span class="ln2">잔여 300만 원</span></button><div id="loanChoices" role="menu" aria-label="대출 금액"><div id="loanTerms"><b id="loanRemaining">잔여 한도 3,000,000원</b><small>매일 아침 통장 잔액으로 우선 상환 · 10일마다 이자</small></div><button type="button" role="menuitem" data-loan="30000">3만 원 · 3명</button><button type="button" role="menuitem" data-loan="100000">10만 원 · 6명</button><button type="button" role="menuitem" data-loan="300000">30만 원 · 11명</button><button type="button" role="menuitem" data-loan="1000000">100만 원 · 18명</button></div></div>
+<div id="loanWrap" aria-hidden="true"><button id="loanBtn" type="button" aria-label="대출 금액 선택" aria-expanded="false"><span class="ln1">대출</span><span class="ln2">잔여 300만 원</span></button><div id="loanChoices" role="menu" aria-label="대출 금액"><div id="loanTerms"><b id="loanRemaining">잔여 한도 3,000,000원</b><small>매일 아침 통장 잔액으로 우선 상환 · 10일마다 이자</small></div><button type="button" role="menuitem" data-loan="30000">3만 원</button><button type="button" role="menuitem" data-loan="100000">10만 원</button><button type="button" role="menuitem" data-loan="300000">30만 원</button><button type="button" role="menuitem" data-loan="1000000">100만 원</button></div></div>
 <div id="ultScr"></div>
 <div id="ultWrap" aria-hidden="true"><canvas id="ultFx"></canvas><button id="selfHitBtn" type="button" aria-label="궁극기 게이지 0퍼센트" disabled><svg viewBox="0 0 100 100" aria-hidden="true">
 <defs>
@@ -1210,6 +1209,59 @@ const WINDOW_DAY_COLOR=new THREE.Color(0xE5BD91);
 const ROOMBITS={};   // things in the room build that belong to him (they leave with him)
 const TP_MAT={};     // pizza box lid, delivery bowl and lid (shared with the furniture that was already lying around)
 const TOILET={x:-0.74,z:-4.0}, BATHG={}, WING={};
+function makeEndWatcherTexture(){
+  const c=mkCanvas(320,420), g=c.getContext('2d');
+  g.clearRect(0,0,c.width,c.height); g.lineCap='round'; g.lineJoin='round';
+  // A neighbour leaning over the sill: most of the body stays outside, only the stare enters the room.
+  g.fillStyle='#303840'; g.strokeStyle='#171A1E'; g.lineWidth=11;
+  g.beginPath(); g.moveTo(28,420); g.quadraticCurveTo(38,337,112,318); g.quadraticCurveTo(160,300,208,318); g.quadraticCurveTo(282,337,292,420); g.closePath(); g.fill(); g.stroke();
+  g.fillStyle='#B98267'; g.fillRect(132,282,56,64);
+  g.fillStyle='#D6A184'; g.strokeStyle='#53392F'; g.lineWidth=8;
+  g.beginPath(); g.moveTo(95,98); g.quadraticCurveTo(107,43,160,38); g.quadraticCurveTo(218,44,229,103); g.lineTo(220,238); g.quadraticCurveTo(207,300,160,312); g.quadraticCurveTo(111,301,99,239); g.closePath(); g.fill(); g.stroke();
+  g.fillStyle='#C48E73';
+  g.beginPath(); g.ellipse(94,191,16,33,-.08,0,Math.PI*2); g.fill();
+  g.beginPath(); g.ellipse(226,191,16,33,.08,0,Math.PI*2); g.fill();
+  // Heavy hair and a low hairline keep the face from reading as a cute mascot.
+  g.fillStyle='#242323';
+  g.beginPath(); g.moveTo(94,117); g.quadraticCurveTo(95,48,157,34); g.quadraticCurveTo(225,46,230,118); g.quadraticCurveTo(210,91,191,94); g.quadraticCurveTo(169,77,145,96); g.quadraticCurveTo(118,87,94,117); g.closePath(); g.fill();
+  g.strokeStyle='#3B2925'; g.lineWidth=11;
+  // One brow is slightly raised; both inner ends press down toward the nose.
+  g.beginPath(); g.moveTo(111,145); g.lineTo(149,154); g.stroke();
+  g.beginPath(); g.moveTo(172,151); g.lineTo(211,138); g.stroke();
+  const eye=(x,y,tilt,px)=>{
+    g.save(); g.translate(x,y); g.rotate(tilt);
+    g.fillStyle='#F3E9DE'; g.strokeStyle='#4B322D'; g.lineWidth=7;
+    g.beginPath(); g.ellipse(0,0,31,14,0,0,Math.PI*2); g.fill(); g.stroke();
+    g.fillStyle='#342B28'; g.beginPath(); g.ellipse(px,5,7,8,0,0,Math.PI*2); g.fill();
+    // The lid hangs low, leaving a narrow eye aimed down into the room.
+    g.fillStyle='#D6A184'; g.beginPath(); g.moveTo(-34,-13); g.quadraticCurveTo(0,4,34,-10); g.lineTo(34,-25); g.lineTo(-34,-25); g.closePath(); g.fill();
+    g.strokeStyle='#4B322D'; g.lineWidth=7; g.beginPath(); g.moveTo(-31,-8); g.quadraticCurveTo(0,2,31,-6); g.stroke();
+    g.restore();
+  };
+  eye(130,183,.05,5); eye(191,180,-.07,-3);
+  g.strokeStyle='#805B4A'; g.lineWidth=7; g.beginPath(); g.moveTo(162,180); g.quadraticCurveTo(151,221,164,227); g.lineTo(176,225); g.stroke();
+  g.fillStyle='#704A40'; g.beginPath(); g.ellipse(158,238,5,3,0,0,Math.PI*2); g.ellipse(176,236,5,3,0,0,Math.PI*2); g.fill();
+  // A tight, off-centre frown rather than a theatrical grimace.
+  g.strokeStyle='#55332F'; g.lineWidth=9; g.beginPath(); g.moveTo(126,267); g.quadraticCurveTo(160,247,200,270); g.stroke();
+  g.strokeStyle='rgba(93,57,48,.45)'; g.lineWidth=5; g.beginPath(); g.moveTo(132,285); g.quadraticCurveTo(162,294,192,283); g.stroke();
+  // Fingers resting on the sill make it unmistakably a person peering in from outside.
+  g.fillStyle='#D6A184'; g.strokeStyle='#53392F'; g.lineWidth=7;
+  for(const x of [76,244]){ g.beginPath(); g.ellipse(x,367,34,19,x<160?.12:-.12,0,Math.PI*2); g.fill(); g.stroke(); }
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; t.minFilter=t.magFilter=THREE.LinearFilter; return t;
+}
+function setEndWatcher(on){
+  const w=WING.watcher; if(!w) return;
+  WING.watchTarget=on?1:0;
+  if(on){ w.visible=true; }
+  else { WING.watchK=0; w.visible=false; w.position.y=WING.watchFromY; w.rotation.z=0; }
+}
+function updEndWatcher(dt){
+  const w=WING.watcher; if(!w||!w.visible) return;
+  WING.watchK+=(WING.watchTarget-WING.watchK)*Math.min(1,dt*5.2);
+  const k=easeOut(clamp(WING.watchK,0,1));
+  w.position.y=lerp(WING.watchFromY,WING.watchY,k);
+  w.rotation.z=Math.sin(G.time*.72)*.012*k;
+}
 const tileTex=(()=>{ const c=mkCanvas(128,128), g=c.getContext('2d'); g.fillStyle='#C9D3D6'; g.fillRect(0,0,128,128); for(let y=0;y<4;y++) for(let x=0;x<4;x++){ g.fillStyle=((x+y)%2)?'#F4F7F7':'#EAF1F2'; g.fillRect(x*32+1.5,y*32+1.5,29,29); } const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; t.wrapS=t.wrapT=THREE.RepeatWrapping; return t; })();
 function tileMat(rx,ry){ const t=tileTex.clone(); t.repeat.set(rx,ry); t.needsUpdate=true; return new THREE.MeshStandardMaterial({map:t,roughness:0.35}); }
 {
@@ -1278,6 +1330,11 @@ function tileMat(rx,ry){ const t=tileTex.clone(); t.repeat.set(rx,ry); t.needsUp
     const pw=ww/2+0.01; WING.sash=[];
     for(let i=0;i<2;i++){ const s=new THREE.Group(); s.position.set(W.x0+pw/2+i*(pw-0.02),cy,ROOM.z0-0.04+(i?0.018:-0.018)); g.add(s); s.userData.dyn=true; s.add(mesh(new THREE.BoxGeometry(pw,wh-0.02,0.012),glass,0,0,0)); for(const [x,y,w,h] of [[0,wh/2-0.02,pw,0.025],[0,-wh/2+0.02,pw,0.025],[-pw/2+0.012,0,0.025,wh-0.02],[pw/2-0.012,0,0.025,wh-0.02]]) s.add(mesh(new THREE.BoxGeometry(w,h,0.02),pvc,x,y,0)); WING.sash.push(s); }
     WING.sash0=WING.sash[0].position.x; WING.open=0; WING.target=0;
+    const watcher=new THREE.Group(); watcher.userData.dyn=true; watcher.visible=false; roomG.add(watcher);
+    const watcherCard=new THREE.Mesh(new THREE.PlaneGeometry(0.38,0.5),new THREE.MeshBasicMaterial({map:makeEndWatcherTexture(),transparent:true,alphaTest:0.02,depthWrite:false,side:THREE.DoubleSide,toneMapped:false}));
+    watcherCard.userData.dyn=true; watcher.add(watcherCard);
+    WING.watcher=watcher; WING.watchK=0; WING.watchTarget=0; WING.watchFromY=W.y0-0.31; WING.watchY=cy;
+    watcher.position.set(cx,WING.watchFromY,ROOM.z0-0.09);
     // siege ladder: rails lean from the sill to the floor
     const lad=new THREE.Group(); lad.visible=false; lad.userData.dyn=true; roomG.add(lad); WING.ladder=lad; WING.ladderK=0;
     const L=Math.hypot(W.y0+0.05,0.4), tilt=Math.atan2(0.4,W.y0+0.05), woodL=std(0xB27A43,{roughness:0.7}), woodLD=std(0x8A5A2C,{roughness:0.75});
@@ -3836,6 +3893,7 @@ function snapshot(){
   disposeSnapVisuals(old);
 }
 function startRound(r){
+  setEndWatcher(false);
   resetCryDrops();
   G.round=r; const stage=G.round, b=buildSpawns(stage); addTrashSpawns(b); G.spawns=b.list; G.cues=b.cues; G.cueIdx=0; G.extra=[]; G.kickAt=0; G.plan=b.plan; G.spawnIdx=0; G.t=0;
   for(let i=0;i<G.pendingLoanSwarm;i++) G.extra.push({t:1.2+i*0.85,ent:'phone'});
@@ -3852,6 +3910,7 @@ function startRound(r){
 }
 function fatAfterRound(fat,eaten){ return Math.min(1.4,fat+eaten); }
 function newRun(){
+  setEndWatcher(false);
   if(typeof DANGER!=='undefined') resetDanger();
   FALL=null; CUT=null; CRY=null; HUSH=null;
   resetCommuteVisual(); G.party=false; G.tearCarry=0; G.stain=0; G.debt=0; G.loanBalance=0; setEntrancesForDay(1); clearLumps();
@@ -3966,7 +4025,7 @@ function resetCryDrops(){
   for(const b of beads){ b.mesh.visible=false; b.trail.forEach(t=>t.visible=false); }
   for(const w of wetSpots){ w.visible=false; w.scale.setScalar(0.001); }
 }
-function startCry(){ drag=null; resetCryDrops(); G.scene='cry'; CRY={t:0,dropped:[false,false],mini:null,jji:false}; showBar(false); SFX.setMurmur(0); hideGhost(); setSelected(null); updateSelfHitBtn(); SFX.tearDrop(); for(const e of EN.list){ if(e.bubble){ e.bubble.remove(); e.bubble=null; } } }
+function startCry(){ drag=null; resetCryDrops(); G.scene='cry'; CRY={t:0,dropped:[false,false],mini:null,jji:false}; setEndWatcher(false); showBar(false); SFX.setMurmur(0); hideGhost(); setSelected(null); updateSelfHitBtn(); SFX.tearDrop(); for(const e of EN.list){ if(e.bubble){ e.bubble.remove(); e.bubble=null; } } }
 
 /* ---------- enemy update ---------- */
 const dirTmp=[0,0]; let simDt=0;
@@ -4754,10 +4813,10 @@ function updateLoanUI(){
   loanBtn.setAttribute('aria-label',canDraw?'대출 금액 선택, 잔여 한도 '+won(available):'대출 불가, 최소 대출 금액 '+won(MIN_LOAN_DRAW));
   loanRemaining.textContent='잔여 한도 '+won(available);
   loanChoices.querySelectorAll('[data-loan]').forEach(btn=>{
-    const amount=Number(btn.dataset.loan), enemies=loanEnemyCount(amount), disabled=amount>available;
-    btn.textContent=(amount/10000)+'만 원 · '+enemies+'명';
+    const amount=Number(btn.dataset.loan), disabled=amount>available;
+    btn.textContent=(amount/10000)+'만 원';
     btn.disabled=disabled; btn.setAttribute('aria-disabled',String(disabled));
-    btn.setAttribute('aria-label',won(amount)+' 대출, '+enemies+'명 추가');
+    btn.setAttribute('aria-label',won(amount)+' 대출');
   });
   if(!canDraw) setLoanOpen(false);
   if(!show){ loanWrap.classList.remove('on'); setLoanOpen(false); loanWrap.setAttribute('aria-hidden','true'); return; }
@@ -5068,7 +5127,7 @@ ${flag(22,-1)}${flag(398,1)}
 
 
 
-function showTitle(){ overlayEl.innerHTML=`<div class="box titleBox">${TITLE_SVG}<div class="titleGoal">첫 월세까지 10일</div><div class="btn" id="btnStart">시작</div></div>`; $('btnStart').addEventListener('pointerdown',ev=>{ ev.stopPropagation(); audioInit(); SFX.click(); overlayEl.innerHTML=''; clearEnemies(); newRun(); startRound(0); }); }
+function showTitle(){ setEndWatcher(false); overlayEl.innerHTML=`<div class="box titleBox">${TITLE_SVG}<div class="btn" id="btnStart">시작</div></div>`; $('btnStart').addEventListener('pointerdown',ev=>{ ev.stopPropagation(); audioInit(); SFX.click(); overlayEl.innerHTML=''; clearEnemies(); newRun(); startRound(0); }); }
 
 function billRound(v){ return Math.round(v/10000)*10000; }
 function makeEvictionBill(){
@@ -5121,7 +5180,7 @@ function settleEvictionBill(b){
 // Evicted: read the termination, widen onto the room exactly as the player left it, then clear it behind a fade.
 // The final landlord text itemises the actual mess and returns only the balance of the deposit.
 let EV=null;
-function startEviction(o){ o=o||{}; FALL=null; G.scene='evict'; EV={t:0,read:false,swapped:false,notified:false,alreadyWide:!!o.alreadyWide,bill:makeEvictionBill()}; if(EV.alreadyWide) camMix=1; showBar(false); hideGhost(); setSelected(null); updateSelfHitBtn(); SFX.setMurmur(0); SFX.setBuzz(0); clearEnemies(); }
+function startEviction(o){ o=o||{}; FALL=null; G.scene='evict'; EV={t:0,read:false,swapped:false,notified:false,alreadyWide:!!o.alreadyWide,bill:makeEvictionBill()}; setEndWatcher(true); if(EV.alreadyWide) camMix=1; showBar(false); hideGhost(); setSelected(null); updateSelfHitBtn(); SFX.setMurmur(0); SFX.setBuzz(0); clearEnemies(); }
 function updEvict(dt){ const e=EV; if(!e) return; e.t+=dt; const fade=$('dayFade');
   if(!e.read){ if(fade) fade.style.opacity=0; if((SMS.q.length===0&&!SMS.cur&&e.t>0.6)||e.t>24){ e.read=true; e.t=0; $('hud').classList.add('hush'); $('labels').classList.add('hush'); } return; }
   const fast=e.alreadyWide, t=e.t, WIDE=fast?0:1.35, HOLD=fast?.75:1.15, OUT=fast?.6:.75, DARK=fast?.25:.3, IN=fast?1.1:1.5, NOTICE=fast?.45:.7;
@@ -5144,7 +5203,7 @@ function emptyRoom(on,keepHud=false){ G.empty=on; const v=!on;
     windowPane.material.color.setHex(0xE5BD91); windowMoon.visible=false; $('hud').classList.toggle('hush',!keepHud); }
   else { $('hud').classList.remove('hush'); setStain(G.stain); }
 }
-function showGameOver(o){ o=o||{}; const empty=!!o.empty, now=G.round+1; showBar(false); if(!o.keepSms) smsClear(); if(!empty&&!o.noWorkSms) sms('근무 알림',WEB+'금일 야간 근무 확정되었습니다.\n00:00 - 09:00',{sticky:true}); G.scene='over'; const rec=o.refund===undefined?`출근 ${G.shift}회 · 최다 ${bestShift}회`:`${now}일째 · 출근 ${G.shift}회 · 보증금 잔액 ${won(o.refund)}`; overlayEl.innerHTML=`<div class="box gameOverBox"><div class="gameOverRec">${rec}</div><div class="btn alt" id="btnRetry">이 판 다시</div><div class="btn" id="btnRestart">처음부터</div></div>`;
+function showGameOver(o){ o=o||{}; const empty=!!o.empty, now=G.round+1; setEndWatcher(empty); showBar(false); if(!o.keepSms) smsClear(); if(!empty&&!o.noWorkSms) sms('근무 알림',WEB+'금일 야간 근무 확정되었습니다.\n00:00 - 09:00',{sticky:true}); G.scene='over'; const rec=o.refund===undefined?`출근 ${G.shift}회 · 최다 ${bestShift}회`:`${now}일째 · 출근 ${G.shift}회 · 보증금 잔액 ${won(o.refund)}`; overlayEl.innerHTML=`<div class="box gameOverBox"><div class="gameOverRec">${rec}</div><div class="btn alt" id="btnRetry">이 판 다시</div><div class="btn" id="btnRestart">처음부터</div></div>`;
   $('btnRetry').addEventListener('pointerdown',ev=>{ ev.stopPropagation(); SFX.click(); overlayEl.innerHTML=''; restoreSnap(); startRound(G.snap.round); });
   $('btnRestart').addEventListener('pointerdown',ev=>{ ev.stopPropagation(); SFX.click(); overlayEl.innerHTML=''; clearEnemies(); newRun(); startRound(0); }); }
 
@@ -5266,7 +5325,7 @@ function step(dt){
   if(G.scene!=='hush'&&camHush>0) camHush=Math.max(0,camHush-dt/0.6);
   // door
   if(doorRattle>0) doorRattle-=dt;
-  updEntrances(dt); updLumps(dt); updRoaches(dt); updPhone(dt); updSms(dt); updCleanBtn(dt);
+  updEntrances(dt); updEndWatcher(dt); updLumps(dt); updRoaches(dt); updPhone(dt); updSms(dt); updCleanBtn(dt);
   const dTarget=(ENTR.doorKick>0&&G.scene==='play'?Math.max(doorTarget,1.62):doorTarget)+(doorRattle>0?Math.sin(G.time*38)*0.045:0); doorAng+=(dTarget-doorAng)*Math.min(1,dt*(ENTR.doorKick>0.5?20:6)); doorHinge.rotation.y=-doorAng;
   if(camShakeT>0){ camShakeT-=dt; if(camShakeT<=0) camShake=0; }
   if(toastT>0){ toastT-=dt; if(toastT<=0) toastEl.style.opacity=0; }
@@ -5334,7 +5393,7 @@ async function boot(){
 boot();
 
 /* debug / balance hooks */
-window.__dbg={ G, EN, get towers(){return towers;}, get projs(){return projs;}, get lumps(){return lumps;}, get trash(){return trash;}, get roaches(){return ROACH.list;}, get flyCounts(){return {bodies:FLY_IM.count,wings:FLY_WING_IM.count};}, get floorMess(){return floorMess;}, get reels(){return {active:REELS.active,visible:REELS.g.visible,floorPhone:PHONEG.g.visible};}, FF, FS, CFG, FOODS, cam:camBase, camera, applyCamera, GI, scene, THREE, drawEye, step, spawnFrom, BATHG, WING, startRound, buildSpawns, roundPlan, roomMess, hasCleanableMess, buildFood, makeLump, cleanNow:cleanRoomNow, floorBloodAt, get CUT(){return CUT;}, updCut, placeValid, isStaticBlocked,
+window.__dbg={ G, EN, get towers(){return towers;}, get projs(){return projs;}, get lumps(){return lumps;}, get trash(){return trash;}, get roaches(){return ROACH.list;}, get flyCounts(){return {bodies:FLY_IM.count,wings:FLY_WING_IM.count};}, get floorMess(){return floorMess;}, get reels(){return {active:REELS.active,visible:REELS.g.visible,floorPhone:PHONEG.g.visible};}, get watcher(){return {visible:!!WING.watcher?.visible,k:WING.watchK||0,target:WING.watchTarget||0};}, FF, FS, CFG, FOODS, cam:camBase, camera, applyCamera, GI, scene, THREE, drawEye, step, spawnFrom, BATHG, WING, startRound, buildSpawns, roundPlan, roomMess, hasCleanableMess, buildFood, makeLump, cleanNow:cleanRoomNow, floorBloodAt, get CUT(){return CUT;}, updCut, placeValid, isStaticBlocked,
   start(r){ overlayEl.innerHTML=''; clearEnemies(); newRun(); G.shift=r||0; startRound(r||0); },
   loan:takeLoan, clean:bookCleaning,
   evictionBill:makeEvictionBill, settleEviction:settleEvictionBill,

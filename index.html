@@ -110,6 +110,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 #loanBtn:disabled{border-color:rgba(70,75,85,.2);background:rgba(240,240,238,.96);color:#777;box-shadow:0 0 0 3px rgba(70,75,85,.08);cursor:not-allowed;transform:none}
 #loanBtn:disabled .ln2{color:#666}
 #loanWrap.open #loanBtn{background:#1748B5;color:#fff;box-shadow:0 0 0 3px rgba(47,107,255,.24)}
+#loanWrap.open::after{border-top-color:#1748B5}
 /* the usual case, now that the loan is on offer for much of the day: a small tag that covers less floor */
 #loanWrap.mini #loanBtn{min-width:0;min-height:40px;padding:0 15px;justify-content:center;align-items:center}
 #loanWrap.mini #loanBtn .ln1{font-size:14px;font-weight:900}

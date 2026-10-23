@@ -405,6 +405,9 @@ const LINES_BY_KIND = {
   lump:['역시 나는 안 돼','내가 그렇지 뭐','난 원래 이런 사람이야','어차피 안 될 거야','해 봤자야','이번 생은 망했어','기대도 안 해','나 같은 게 뭘'],
 };
 const BASE_LINE_COUNT = Object.values(LINES_BY_KIND).reduce((n,lines)=>n+lines.length,0);
+const LINE_KIND_ORDER = ['pity','compare','wronged','lump'];
+const PRIOR_LINES_BY_KIND = Object.fromEntries(LINE_KIND_ORDER.map((kind,i)=>[kind,LINE_KIND_ORDER.slice(0,i).flatMap(k=>LINES_BY_KIND[k])]));
+const OWN_LINE_CHANCE = {pity:1,compare:0.65,wronged:0.65,lump:0.60};
 const FAT_LINES = [
   {min:0.35, lines:['먹어서 버틴 거야','스트레스 받아서 그래','먹을 때만 덜 괴로워','오늘까지만 먹자','내일부터 해야지']},
   {min:0.55, lines:['이 몸으로 누가 날 좋아해','먹는 것밖에 내 편이 없어','거울 보기 싫어','사진 찍기 싫어','내 몸이 부끄러워','옷이 다 안 맞아']},
@@ -5284,7 +5287,7 @@ function updWatchBubble(){
 // speech bubbles
 let bubbles=[];
 
-// 각 형태는 자기 단계의 독백만 말하고, 본체와 함께 살이 찔수록 체중 독백이 따로 섞입니다.
+// 각 형태는 이전 단계의 생각을 품은 채 자기 단계의 독백이 더 자주 나오고, 체중 독백은 별도로 섞입니다.
 let lineBags={}, fatLineBag=[], lastLine='';
 
 function shuffled(a){
@@ -5300,22 +5303,28 @@ function shuffled(a){
 
 function resetLineBags(){ lineBags={}; fatLineBag=[]; lastLine=''; }
 function currentFatLines(){ const out=[]; for(const tier of FAT_LINES) if(G.fat>=tier.min) out.push(...tier.lines); return out; }
-function pullLine(pool,kind,busy){
+function pullLine(pool,bagKey,busy){
   if(!pool.length) return '';
-  let bag=kind==='fat'?fatLineBag:(lineBags[kind]||[]), i=bag.findIndex(l=>pool.includes(l)&&!busy.has(l));
+  let bag=bagKey==='fat'?fatLineBag:(lineBags[bagKey]||[]), i=bag.findIndex(l=>pool.includes(l)&&!busy.has(l));
   if(i<0){ bag=bag.concat(shuffled(pool)); i=bag.findIndex(l=>!busy.has(l)); }
   const out=i<0?'':bag.splice(i,1)[0];
-  if(kind==='fat') fatLineBag=bag; else lineBags[kind]=bag;
+  if(bagKey==='fat') fatLineBag=bag; else lineBags[bagKey]=bag;
   return out;
+}
+function pullKindLine(kind,busy){
+  const ownPool=LINES_BY_KIND[kind], priorPool=PRIOR_LINES_BY_KIND[kind], ownFirst=!priorPool.length||Math.random()<OWN_LINE_CHANCE[kind];
+  let text=pullLine(ownFirst?ownPool:priorPool,kind+(ownFirst?':own':':prior'),busy);
+  if(!text&&priorPool.length) text=pullLine(ownFirst?priorPool:ownPool,kind+(ownFirst?':prior':':own'),busy);
+  return text;
 }
 function nextLine(kind){
   const baseKind=LINES_BY_KIND[kind]?kind:'pity', basePool=LINES_BY_KIND[baseKind];
-  const busy=new Set(bubbles.map(b=>b.text)), fatPool=currentFatLines();
-  if(basePool.length+fatPool.length>busy.size+1&&lastLine) busy.add(lastLine);
+  const priorPool=PRIOR_LINES_BY_KIND[baseKind], busy=new Set(bubbles.map(b=>b.text)), fatPool=currentFatLines();
+  if(basePool.length+priorPool.length+fatPool.length>busy.size+1&&lastLine) busy.add(lastLine);
   // Keep the old weight-line frequency; splitting the base pool must not make it jump to the 55% cap.
   const fatChance=clamp(3*fatPool.length/(fatPool.length+BASE_LINE_COUNT),0,0.55), fatFirst=fatPool.length&&Math.random()<fatChance;
-  let text=pullLine(fatFirst?fatPool:basePool,fatFirst?'fat':baseKind,busy);
-  if(!text) text=pullLine(fatFirst?basePool:fatPool,fatFirst?baseKind:'fat',busy);
+  let text=fatFirst?pullLine(fatPool,'fat',busy):pullKindLine(baseKind,busy);
+  if(!text) text=fatFirst?pullKindLine(baseKind,busy):pullLine(fatPool,'fat',busy);
   if(!text) text=pick(basePool);
   return lastLine=text;
 }

@@ -357,12 +357,11 @@ const CFG = {
   // by `grow` a day, the floor adds at most `cap` of the day's own count, and nothing comes out of litter closer
   // than `near` to the head (it would be in before anything could shoot).
   LITTER: { pack:1, box:2, rot:2, mold:1, grow:0.12, cap:0.5, near:0.45 },
-  // What the cleaners charge: a call-out fee; the heaps by how full the room is, steeper the longer it's left
-  // (HEAP·f + HEAP2·f²); every piece still lying on the floor (empty package, a pizza or chicken box counting twice,
-  // rotting leftover, mould lump); the stains; and the junk that was already here, until their first visit. Rounded
-  // to STEP. On the usual run that's 2.5만 the first day, about 5만 by day 5, 10만 by day 10 and 20만 for a full room:
-  // a third to a half of a day's money in the first week, a loan's worth once it's been let go.
-  CLEAN: { BASE:15000, HEAP:60000, HEAP2:100000, JUNK:300, FLOOR:5000, PROPS:10000, STEP:5000 },
+  // Cleaning is quoted from physical delivery waste only. The 4만원 minimum includes the small amount already
+  // lying around. Beyond that, empty packaging raises the price by total volume; waste that still contains food is
+  // 1.5× the same empty package, once only. Rotting and mould never add a second surcharge, and metaphorical battle
+  // marks never enter the quote. The curve reaches 20만원 at a full room and rounds to STEP.
+  CLEAN: { BASE:40000, INCLUDED:0.10, HEAP:60000, HEAP2:100000, FOOD_EXTRA:0.5, STEP:5000 },
   MAX_EN: 340,
   ENTRY_TEAR: 0.012, INNER_EROSION: 0.00015, MAX_EROSION: 0.004, ENTER_TIME: 0.78, TEAR_CARRY: 0.5,
   // the ultimate is ready after this much new tear is gained today (and only once a day)
@@ -3327,7 +3326,15 @@ function dressLump(L){
   bakeGroup(L.g);
   L.g.updateMatrixWorld(true); const bb=new THREE.Box3().setFromObject(L.g); L.top=clamp(bb.max.y-L.g.position.y,.025,.17);
 }
-function removeLump(L,stain){ scene.remove(L.g); disposeRetryVisual(L.g,false); if(stain) DEC.moldStain(L.x,L.z,FOOD_BY[L.food].foot*1.35); const i=lumps.indexOf(L); if(i>=0) lumps.splice(i,1); }
+function removeLump(L,stain){
+  scene.remove(L.g); disposeRetryVisual(L.g,false);
+  if(stain){
+    DEC.moldStain(L.x,L.z,FOOD_BY[L.food].foot*1.35);
+    // Once the model sinks away, keep the same physical food-waste burden in the aggregate heap.
+    if(!L.seed&&!(NIGHT&&NIGHT.clean)){ const v=foodDiscardVol(L.food); G.trashV+=v; if(NIGHT&&Number.isFinite(NIGHT.V1)) NIGHT.V1+=v; }
+  }
+  const i=lumps.indexOf(L); if(i>=0) lumps.splice(i,1);
+}
 function clearLumps(){ for(const L of lumps.slice()) removeLump(L,false); SFX.setBuzz(0); }
 function lumpArea(){ let a=0; for(const L of lumps) a+=Math.PI*L.r*L.r; return a; }
 function lumpAt(x,z,pad){ for(const L of lumps) if(Math.hypot(L.x-x,L.z-z)<L.r+pad) return L; return null; }
@@ -3386,9 +3393,9 @@ function addTrash(m,kind){ if(m.isGroup){ m.updateMatrixWorld(true); bakeGroup(m
   // packaging shrink away onto the heap
   if(trash.length>TRASH_CAP){ let i=trash.findIndex(o=>o.userData.kind==='pack'); if(i<0) i=0; const old=trash.splice(i,1)[0]; dropRotHost(old); retiring.push({m:old,t:0,sx:old.scale.x,sy:old.scale.y,sz:old.scale.z}); } }
 function updRetiring(dt){ for(let i=retiring.length-1;i>=0;i--){ const r=retiring[i]; r.t+=dt; const s=Math.max(0.001,1-easeIn(Math.min(1,r.t/0.6))); r.m.scale.set(r.sx*s,r.sy*s,r.sz*s);
-    if(r.t>=0.6){ retiring.splice(i,1); retireTrash(r.m); if(r.m.userData.kind!=='food') buildTrashPile(); } } }
-function flushRetiring(){ for(const r of retiring){ if(r.m.userData.kind!=='food') G.trashV+=packVol(r.m); removeTrashVisual(r.m); } retiring=[]; }
-function retireTrash(m){ dropRotHost(m); const u=m.userData; if(u.kind!=='food') G.trashV+=packVol(m); else if(u.age>=1) DEC.rot(m.position.x,m.position.z,(u.r||0.07)*0.9); else DEC.crumbs(m.position.x,m.position.z,'#C9A46A'); removeTrashVisual(m); }
+    if(r.t>=0.6){ retiring.splice(i,1); retireTrash(r.m); buildTrashPile(); } } }
+function flushRetiring(){ for(const r of retiring){ G.trashV+=discardVol(r.m); removeTrashVisual(r.m); } retiring=[]; }
+function retireTrash(m){ dropRotHost(m); const u=m.userData; G.trashV+=discardVol(m); if(u.kind==='food'){ if(u.age>=1) DEC.rot(m.position.x,m.position.z,(u.r||0.07)*0.9); else DEC.crumbs(m.position.x,m.position.z,'#C9A46A'); } removeTrashVisual(m); }
 // a piece about to rot gets its own materials (disposed with it, see disposeRetryVisual)
 function ownMaterials(root){ const own=root.userData.retryOwnsMaterials; root.traverse(o=>{ if(!o.isMesh||!o.material||Array.isArray(o.material)) return; if(o.material.userData.lumpOwned) return; if(!own) o.material=o.material.clone(); o.material.userData.lumpOwned=true; }); }
 function addRotHost(m){ if(rotHosts.some(H=>H.m===m)) return; const u=m.userData, R=(u.r||0.06)*0.6, top=u.top||0.05, n=Math.random()<0.45?1:2;
@@ -3405,7 +3412,7 @@ function trashNightStart(){ if(NIGHT) return; settleLitterFx(); if(retiring.leng
     if(u.age>=1){ if(u.kind==='food') N.sink.push(m); else N.leave.push(m); }
     else if(u.kind==='food'){ ownMaterials(m); m.traverse(o=>{ if(o.isMesh&&o.material&&o.material.color&&o.userData.c0===undefined) o.userData.c0=o.material.color.getHex(); }); N.rot.push(m); addRotHost(m); } }
   if(N.clean){ N.V1=0; NIGHT=N; return; }
-  let v=G.trashV; for(const m of N.leave) v+=packVol(m); N.V1=v; const n0=TP.n, n1=trashCount(v);
+  let v=G.trashV; for(const m of N.leave) v+=discardVol(m); for(const m of N.sink) v+=discardVol(m); N.V1=v; const n0=TP.n, n1=trashCount(v);
   if(n1>n0){ N.fresh=new THREE.Group(); for(let i=n0;i<n1;i++){ const g=tpItem(TP.slots[i]); g.userData.y=g.position.y; g.scale.setScalar(0.001); g.visible=false; N.fresh.add(g); } scene.add(N.fresh); }
   NIGHT=N; }
 function trashNightStep(k){ const N=NIGHT; if(!N) return;
@@ -3505,17 +3512,27 @@ function updRoaches(dt){
   ROACH_IM.count=ROACH.list.length; if(ROACH.list.length) ROACH_IM.instanceMatrix.needsUpdate=true;
 }
 function packVol(m){ return CFG.TRASH_VOL[m.userData.foodId]||0.7; }
-// The cleaners' quote looks at the whole room, not just old packaging that has already migrated to the wall heaps
-// (CFG.CLEAN). Live food towers do not count until they become discarded packaging or rotten leftovers.
+function foodDiscardVol(foodId){ return (CFG.TRASH_VOL[foodId]||0.7)*(1+CFG.CLEAN.FOOD_EXTRA); }
+function discardVol(m){ return packVol(m)*(m.userData.kind==='food'?1+CFG.CLEAN.FOOD_EXTRA:1); }
+// Only physical delivery waste enters the quote. A food remnant is the same package burden plus one 50% handling
+// addition; its later rot or mould is a visual state, not another billable item. Live food towers do not count.
+function physicalWasteVolume(){
+  let v=G.trashV;
+  for(const m of trash) if(m.parent&&m.visible!==false) v+=discardVol(m);
+  for(const r of retiring) if(r.m.parent&&r.m.visible!==false) v+=discardVol(r.m);
+  for(const L of lumps) if(!L.seed&&L.g.parent&&L.g.visible!==false) v+=foodDiscardVol(L.food);
+  return v;
+}
+function cleanWasteFill(){
+  const C=CFG.CLEAN, raw=trashFill(physicalWasteVolume());
+  return clamp((raw-C.INCLUDED)/(1-C.INCLUDED),0,1);
+}
 function cleanQuote(){
-  const C=CFG.CLEAN, f=trashFill(); let junk=0;
-  for(const m of trash){ if(!m.parent||m.visible===false) continue; const u=m.userData; junk+=(u.kind!=='food'&&(u.foodId==='pizza'||u.foodId==='chicken'))?2:1; }
-  for(const L of lumps) if(L.g.parent&&L.g.visible!==false) junk++;
-  const q={base:C.BASE,heap:C.HEAP*f+C.HEAP2*f*f,junk:C.JUNK*junk,floor:C.FLOOR*floorMess,props:G.propsGone?0:C.PROPS};
-  q.total=Math.max(C.STEP,Math.round((q.base+q.heap+q.junk+q.floor+q.props)/C.STEP)*C.STEP);
+  const C=CFG.CLEAN, f=cleanWasteFill(), q={base:C.BASE,waste:C.HEAP*f+C.HEAP2*f*f};
+  q.total=Math.max(C.BASE,Math.round((q.base+q.waste)/C.STEP)*C.STEP);
   return q;
 }
-function hasCleanableMess(){ return !G.propsGone||G.trashV>0.01||trash.length>0||lumps.length>0||floorMess>0.01; }
+function hasCleanableMess(){ return !G.propsGone||physicalWasteVolume()>0.01; }
 // one emptied package as it lies on the heap
 function tpItem(s){ const g=new THREE.Group(); g.rotation.order='YXZ'; g.position.set(s.x,s.y,s.z); g.rotation.set(s.tx,s.yaw,s.tz);
   const t=s.type;
@@ -4505,9 +4522,9 @@ function updSms(dt){ if(SMS.cur){ if(SMS.cur.sticky) return; SMS.t-=dt; if(SMS.t
    The crew comes that night while he's out (or lying there) and takes every bit of it. */
 const cleanBtn=$('cleanBtn'), cleanL1=cleanBtn.querySelector('.cl1'), cleanL2=cleanBtn.querySelector('.cl2'); let cleanArmT=0, cleanWarnT=0, cleanTxt='';
 function cleanPrice(){ return cleanQuote().total; }
-// 15000 → "1.5만 원", 30000 → "3만 원"
+// 40000 → "4만 원", 65000 → "6.5만 원"
 function manwon(v){ const m=Math.round(v/1000)/10; return (Number.isInteger(m)?m:m.toFixed(1))+'만 원'; }
-// Fresh boxes, rotten food, stains and the original clutter all count, so the service remains reusable.
+// Packaging and food left in it count by volume; metaphorical marks never affect the price.
 function sendCleaningAd(){ if(G.trashAdSent) return; G.trashAdSent=true; sms('광고','(광고) 원룸 청소·쓰레기 정리 '+manwon(CFG.CLEAN.BASE)+'부터\n당일 방문, 비밀 보장'); }
 function cleanOffered(){ return G.scene==='play'&&!G.cleanBooked&&hasCleanableMess(); }
 function updCleanBtn(dt){

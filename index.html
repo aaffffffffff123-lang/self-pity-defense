@@ -465,9 +465,9 @@ function audioInit(){
     finalOut=AC.createGain(); finalOut.gain.value=muted?0:1; finalOut.connect(AC.destination);
     master=AC.createGain(); master.gain.value=0.85; master.connect(comp); comp.connect(finalOut);
     // Keep the non-impact ultimate FX away from the punch-driven compressor.
-    // 1.70 is an actual +6 dB against the normal 0.85 path; its own limiter only catches peaks.
+    // 3.40 is twice the previous ultimate mix (+12 dB against the normal 0.85 path); its own limiter only catches peaks.
     const ultComp=AC.createDynamicsCompressor(); ultComp.threshold.value=-3; ultComp.knee.value=4; ultComp.ratio.value=8; ultComp.attack.value=0.002; ultComp.release.value=0.11;
-    ultFxBus=AC.createGain(); ultFxBus.gain.value=1.70; ultFxBus.connect(ultComp); ultComp.connect(finalOut);
+    ultFxBus=AC.createGain(); ultFxBus.gain.value=3.40; ultFxBus.connect(ultComp); ultComp.connect(finalOut);
     talkBus=AC.createGain(); talkBus.gain.value=1; talkBus.connect(master);
     noiseBuf=AC.createBuffer(1,AC.sampleRate*2,AC.sampleRate); const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
     murmurG=AC.createGain(); murmurG.gain.value=0; murmurG.connect(master);
@@ -1008,7 +1008,7 @@ const SFX={
     const busy=POOP.live.length>0, buf=poopTake(!busy), rate=rand(0.93,1.08);
     POOP.at=now; duckAnimalTalk();
     const src=trackTransient(AC.createBufferSource()), g=AC.createGain();
-    src.buffer=buf; src.playbackRate.value=rate; g.gain.value=busy?0.075:0.1;
+    src.buffer=buf; src.playbackRate.value=rate; g.gain.value=busy?0.0375:0.05;
     src.connect(g); g.connect(sfxOut({pan})); src.start(now);
     POOP.live.push(now+buf.duration/rate);
   },
@@ -1140,7 +1140,7 @@ const SFX={
     // 여러 명이 동시에 들어가도 소리가 무한히 커지지 않게 제한
     const crowd=count ? 1+0.26*Math.log2(count) : 0;
     const volume=count
-      ? Math.min(0.0325,0.02*pressure*crowd)
+      ? Math.min(0.01625,0.01*pressure*crowd)
       : 0;
 
     aim(s.out.gain,volume,count?0.035:0.075);

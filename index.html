@@ -117,11 +117,11 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--cream);font-fami
 #loanWrap.open #loanBtn .ln2{color:#DCE7FF}
 #loanChoices{position:absolute;left:50%;bottom:calc(100% + 9px);width:196px;transform:translateX(-50%);display:none;grid-template-columns:repeat(2,1fr);gap:6px;padding:8px;border-radius:14px;background:rgba(255,255,255,.98);box-shadow:0 4px 16px rgba(36,32,30,.2)}
 #loanWrap.open #loanChoices{display:grid}
-#loanTerms{grid-column:1/-1;display:flex;flex-direction:column;gap:2px;padding:2px 3px 5px;text-align:center;color:#4E5665;font:800 11px/1.25 'Noto Sans KR',sans-serif;word-break:keep-all}
-#loanTerms b{color:#1748B5;font-size:13px}
-#loanTerms small{font-size:10px;font-weight:700;color:#6B7280}
-#loanShort{color:#C2263A;font-size:12px;font-weight:900}
-#loanShort:empty{display:none}
+#loanTerms{grid-column:1/-1;display:flex;flex-direction:column;gap:5px;padding:2px 3px 5px;color:#4E5665;font:800 11px/1.25 'Noto Sans KR',sans-serif}
+#loanLimitHead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#loanLimitHead b{color:#1748B5;font-size:13px;white-space:nowrap}
+#loanLimit{height:9px;overflow:hidden;border-radius:999px;background:#D9DFEA;box-shadow:inset 0 1px 2px rgba(23,72,181,.16)}
+#loanLimitFill{display:block;width:100%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#1748B5,#4C83FF);transition:width .22s ease-out}
 #loanChoices button{min-height:40px;border:1px solid rgba(47,107,255,.22);border-radius:10px;background:#EEF3FF;color:#1748B5;font:900 14px/1 'Noto Sans KR',sans-serif;cursor:pointer;touch-action:manipulation}
 #loanChoices button:active{transform:scale(.95);background:#DCE7FF}
 #loanChoices button:disabled{opacity:.34;filter:grayscale(.45);cursor:not-allowed;transform:none;background:#E7E9EE;color:#777}
@@ -261,7 +261,7 @@ body.gamePaused #app *,body.gamePaused #app *::before,body.gamePaused #app *::af
 <div id="overlay"></div>
 <button id="cutSkip" type="button" aria-label="출근 장면 건너뛰기" aria-hidden="true" disabled>출근 건너뛰기 ›</button>
 <button id="cleanBtn" type="button" aria-label="집청소 부르기"><span class="cl1">집청소</span><span class="cl2"></span></button>
-<div id="loanWrap" aria-hidden="true"><button id="loanBtn" type="button" aria-label="대출 금액 선택" aria-expanded="false"><span class="ln1">대출</span><span class="ln2">잔여 300만 원</span></button><div id="loanChoices" role="menu" aria-label="대출 금액"><div id="loanTerms"><b id="loanRemaining">잔여 한도 3,000,000원</b><span id="loanShort"></span><small>매일 아침 월세·요금을 내고 남은 잔액으로 상환 · 10일마다 이자</small></div><button type="button" role="menuitem" data-loan="30000">3만 원</button><button type="button" role="menuitem" data-loan="100000">10만 원</button><button type="button" role="menuitem" data-loan="300000">30만 원</button><button type="button" role="menuitem" data-loan="1000000">100만 원</button></div></div>
+<div id="loanWrap" aria-hidden="true"><button id="loanBtn" type="button" aria-label="대출 금액 선택" aria-expanded="false"><span class="ln1">대출</span><span class="ln2">잔여 300만 원</span></button><div id="loanChoices" role="menu" aria-label="대출 금액"><div id="loanTerms"><div id="loanLimitHead"><span>대출 가능</span><b id="loanRemaining">3,000,000원</b></div><div id="loanLimit" role="progressbar" aria-label="남은 대출 가능 금액" aria-valuemin="0" aria-valuemax="3000000" aria-valuenow="3000000" aria-valuetext="3,000,000원"><i id="loanLimitFill"></i></div></div><button type="button" role="menuitem" data-loan="30000">3만 원</button><button type="button" role="menuitem" data-loan="100000">10만 원</button><button type="button" role="menuitem" data-loan="300000">30만 원</button><button type="button" role="menuitem" data-loan="1000000">100만 원</button></div></div>
 <div id="ultScr"></div>
 <div id="ultWrap" aria-hidden="true"><canvas id="ultFx"></canvas><button id="selfHitBtn" type="button" aria-label="궁극기 게이지 0퍼센트" disabled><svg viewBox="0 0 100 100" aria-hidden="true">
 <defs>
@@ -5131,7 +5131,7 @@ function positionTearMeter(){
   tearMeter.style.left=bx+'px'; tearMeter.style.top=by+'px';
   tearMeter.style.setProperty('--tail',clamp(scr.x-bx+bw/2,8,bw-8)+'px');
 }
-const loanWrap=$('loanWrap'), loanBtn=$('loanBtn'), loanChoices=$('loanChoices'), loanRemaining=$('loanRemaining'), loanShort=$('loanShort'); let loanOpen=false;
+const loanWrap=$('loanWrap'), loanBtn=$('loanBtn'), loanChoices=$('loanChoices'), loanRemaining=$('loanRemaining'), loanLimit=$('loanLimit'), loanLimitFill=$('loanLimitFill'); let loanOpen=false;
 function setLoanOpen(on){
   loanOpen=!!on&&phoneLit()&&loanAvailable()>=MIN_LOAN_DRAW&&!gamePaused;
   loanWrap.classList.toggle('open',loanOpen);
@@ -5145,9 +5145,12 @@ function updateLoanUI(){
   loanBtn.querySelector('.ln2').textContent=canDraw?'잔여 '+short:(available>0?'잔여 '+short:'한도 소진');
   loanBtn.disabled=!canDraw; loanBtn.setAttribute('aria-disabled',String(!canDraw));
   loanBtn.setAttribute('aria-label',canDraw?'대출 금액 선택, 잔여 한도 '+won(available):'대출 불가, 최소 대출 금액 '+won(MIN_LOAN_DRAW));
-  loanRemaining.textContent='잔여 한도 '+won(available);
-  const ln=loanNeed(), gap=ln.need-G.money, gapTxt=gap>0?ln.why+'까지 '+won(gap)+' 부족':'';
-  if(loanShort.textContent!==gapTxt) loanShort.textContent=gapTxt;
+  loanRemaining.textContent=won(available);
+  const limitRatio=CFG.LOAN_LIMIT>0?clamp(available/CFG.LOAN_LIMIT,0,1):0;
+  loanLimitFill.style.width=(limitRatio*100)+'%';
+  loanLimit.setAttribute('aria-valuemax',String(CFG.LOAN_LIMIT));
+  loanLimit.setAttribute('aria-valuenow',String(available));
+  loanLimit.setAttribute('aria-valuetext',won(available));
   loanChoices.querySelectorAll('[data-loan]').forEach(btn=>{
     const amount=Number(btn.dataset.loan), disabled=amount>available;
     btn.textContent=(amount/10000)+'만 원';

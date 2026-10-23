@@ -1003,7 +1003,7 @@ const SFX={
     const busy=POOP.live.length>0, buf=poopTake(!busy), rate=rand(0.93,1.08);
     POOP.at=now; duckAnimalTalk();
     const src=trackTransient(AC.createBufferSource()), g=AC.createGain();
-    src.buffer=buf; src.playbackRate.value=rate; g.gain.value=busy?0.15:0.2;
+    src.buffer=buf; src.playbackRate.value=rate; g.gain.value=busy?0.075:0.1;
     src.connect(g); g.connect(sfxOut({pan})); src.start(now);
     POOP.live.push(now+buf.duration/rate);
   },
@@ -1135,7 +1135,7 @@ const SFX={
     // 여러 명이 동시에 들어가도 소리가 무한히 커지지 않게 제한
     const crowd=count ? 1+0.26*Math.log2(count) : 0;
     const volume=count
-      ? Math.min(0.065,0.04*pressure*crowd)
+      ? Math.min(0.0325,0.02*pressure*crowd)
       : 0;
 
     aim(s.out.gain,volume,count?0.035:0.075);

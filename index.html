@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>자기연민 디펜스</title>
-<meta name="description" content="&#8203;">
+<meta name="description" content="침식해 오는 나들을 음식으로 막아내는 원룸 디펜스.">
 <link rel="canonical" href="https://aaffffffffff123-lang.github.io/self-pity-defense/">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="ko_KR">
 <meta property="og:title" content="자기연민 디펜스">
-<meta property="og:description" content="&#8203;">
+<meta property="og:description" content="침식해 오는 나들을 음식으로 막아내는 원룸 디펜스.">
 <meta property="og:url" content="https://aaffffffffff123-lang.github.io/self-pity-defense/">
 <meta property="og:image" content="https://aaffffffffff123-lang.github.io/self-pity-defense/og-preview.png?v=20261022b">
 <meta property="og:image:width" content="1200">
@@ -17,7 +17,7 @@
 <meta property="og:image:type" content="image/png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="자기연민 디펜스">
-<meta name="twitter:description" content="&#8203;">
+<meta name="twitter:description" content="침식해 오는 나들을 음식으로 막아내는 원룸 디펜스.">
 <meta name="twitter:image" content="https://aaffffffffff123-lang.github.io/self-pity-defense/og-preview.png?v=20261022b">
 <link rel="icon" type="image/svg+xml" sizes="any" href="./favicon.svg?v=20261023b">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -241,7 +241,7 @@ body.gamePaused #app *,body.gamePaused #app *::before,body.gamePaused #app *::af
   .card .am,.card .role{font-size:8px}
 }
 </style>
-<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+<script type="importmap">{"imports":{"three":"./three.module.min.js"}}</script>
 </head>
 <body>
 <div id="app">
@@ -363,9 +363,13 @@ const CFG = {
   // marks never enter the quote. The curve reaches 20만원 at a full room and rounds to STEP.
   CLEAN: { BASE:40000, INCLUDED:0.10, HEAP:60000, HEAP2:100000, FOOD_EXTRA:0.5, STEP:5000 },
   MAX_EN: 340,
-  ENTRY_TEAR: 0.012, INNER_EROSION: 0.00015, MAX_EROSION: 0.004, ENTER_TIME: 0.78, TEAR_CARRY: 0.5,
+  // Getting in costs little on the spot; the ones already inside keep gnawing (per self per second, capped), so a leak
+  // is a steady drain there is still time to stop rather than one jump.
+  ENTRY_TEAR: 0.007, INNER_EROSION: 0.0006, MAX_EROSION: 0.03, ENTER_TIME: 0.78, TEAR_CARRY: 0.5,
   // the ultimate is ready after this much new tear is gained today (and only once a day)
-  ULT_TEAR: 0.5,
+  ULT_TEAR: 0.2,
+  // weight put on per unit eaten (the oversleep check still reads what was eaten, not what it weighs)
+  FAT_RATE: 0.7,
   CURVE: { base:18, grow:10, grow2:0.6 },
   DAY_LOAD: {3:0.78,4:0.87,5:0.93,6:0.82,7:0.90},
   // the first days: more of them, from the first trickle to the last flood, so a day isn't won by one food.
@@ -2254,7 +2258,9 @@ function makeGiant(){
   GI.armOut=()=>0.12+Math.min(1.4,GI.fat)*0.3;
   // Standing, the belly sticks out in front. On its back it can't rise into a dome that reaches up between the camera
   // and the face: it settles and spreads to the sides instead. u: 0 standing … 1 lying.
-  GI.bellyPose=u=>{ const k=GI.fat; belly.scale.set(1+1.25*k+0.15*k*u,0.75+0.5*k,0.55+2.2*k-1.0*k*u); belly.position.set(0,0.19-0.01*k,0.06+0.06*k); };
+  // At no weight the belly sits flush with the shirt front (0.42 keeps it inside the torso's depth); it reaches the
+  // same size as before by k=1.
+  GI.bellyPose=u=>{ const k=GI.fat; belly.scale.set(1+1.25*k+0.15*k*u,0.75+0.5*k,0.42+2.33*k-1.0*k*u); belly.position.set(0,0.19-0.01*k,0.06+0.06*k); };
   GI.setFat=f=>{ GI.fat=f; const k=f, k1=Math.min(1,k);
     headG.scale.set(1,1,1);
     GI.cheekS=0.3+0.62*k1; GI.applyCheeks();
@@ -2314,17 +2320,19 @@ function headSurfaceY(x,z){ const dx=x/HEADW.r.x, dz=z/HEADW.r.z; const k=1-dx*d
 function headNormalAt(u,out){ return (out||new V3()).set(u.x/HEADW.r.x,u.y/HEADW.r.y,u.z/HEADW.r.z).normalize(); }
 // face decals (blood on the face)
 const faceDecals=[]; let faceDecalIdx=0; const splatTexes=[];
+// what each decal was given (direction, size), in the same slots, so a saved run can put the blood back on the face
+let faceDecalLog=[];
 function makeSplatTex(){ const c=mkCanvas(128,128); const g=c.getContext('2d'); g.clearRect(0,0,128,128); const col=pick(['#D8142A','#B90F22','#E0203A']); g.fillStyle=col; ell(g,64,64,rand(26,34),rand(20,28),rand(0,3)); g.fill(); for(let i=0;i<9;i++){ const a=rand(0,6.28),d=rand(20,52),s=rand(4,11); ell(g,64+Math.cos(a)*d,64+Math.sin(a)*d,s,s*0.8); g.fill(); if(Math.random()<0.6){ g.lineWidth=s*0.7; g.strokeStyle=col; g.beginPath(); g.moveTo(64+Math.cos(a)*14,64+Math.sin(a)*14); g.lineTo(64+Math.cos(a)*d,64+Math.sin(a)*d); g.stroke(); } } const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t; }
 for(let i=0;i<4;i++) splatTexes.push(makeSplatTex());
 function addFaceDecal(u, size){
   const dir=[u.x,-u.z,u.y]; // world unit -> head local dir (lying rotation)
-  const geo=surfacePatch(HR,dir,size,size,6);
+  const geo=surfacePatch(HR,dir,size,size,6), rec=[+u.x.toFixed(4),+u.y.toFixed(4),+u.z.toFixed(4),+size.toFixed(4)];
   let m;
-  if(faceDecals.length<40){ m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({map:pick(splatTexes),transparent:true,roughness:0.3,polygonOffset:true,polygonOffsetFactor:-3,polygonOffsetUnits:-3,depthWrite:false})); GI.headG.add(m); faceDecals.push(m); }
-  else { m=faceDecals[faceDecalIdx]; faceDecalIdx=(faceDecalIdx+1)%40; m.geometry.dispose(); m.geometry=geo; m.material.map=pick(splatTexes); m.material.needsUpdate=true; }
+  if(faceDecals.length<40){ m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({map:pick(splatTexes),transparent:true,roughness:0.3,polygonOffset:true,polygonOffsetFactor:-3,polygonOffsetUnits:-3,depthWrite:false})); GI.headG.add(m); faceDecals.push(m); faceDecalLog.push(rec); }
+  else { m=faceDecals[faceDecalIdx]; faceDecalLog[faceDecalIdx]=rec; faceDecalIdx=(faceDecalIdx+1)%40; m.geometry.dispose(); m.geometry=geo; m.material.map=pick(splatTexes); m.material.needsUpdate=true; }
   m.rotation.set(0,0,0);
 }
-function clearFaceDecals(){ for(const m of faceDecals){ GI.headG.remove(m); disposeRetryVisual(m,true); } faceDecals.length=0; faceDecalIdx=0; }
+function clearFaceDecals(){ for(const m of faceDecals){ GI.headG.remove(m); disposeRetryVisual(m,true); } faceDecals.length=0; faceDecalIdx=0; faceDecalLog=[]; }
 // tear overflow objects
 const cryG=new THREE.Group(); scene.add(cryG);
 const beads=[]; for(const s of [-1,1]){ const b=mesh(new THREE.SphereGeometry(1,14,10),M.tear,0,0,0); b.visible=false; cryG.add(b); const trail=[]; for(let i=0;i<7;i++){ const t=mesh(new THREE.SphereGeometry(1,8,6),M.tear,0,0,0); t.visible=false; cryG.add(t); trail.push(t); } beads.push({side:s,mesh:b,trail}); }
@@ -2440,6 +2448,8 @@ function setEnemyArm(i,base,side,swing,bend,drop,fat=0){
 }
 // 걸을 때 자세: back=허리 굽힘, lean=몸 전체 앞 기울기, head=고개 숙임 (라디안)
 const STOOP={back:0.36,lean:0.05,head:0.04}, E_HIP=0.055, upM=new THREE.Matrix4(), hipM=new THREE.Matrix4(), zeroM=new THREE.Matrix4().makeScale(0,0,0);
+// head raised on the way in (see syncEnemies): metres from the head's centre where it starts and where it is fully up, and the tilt then
+const LOOKUP={far:1.3,near:0.5,tilt:-0.85};
 function syncEnemies(tNow){
   const L=EN.list, n=L.length, P=EN.parts; let lumpFaceN=0;
   for(let i=0;i<n;i++){ const e=L[i];
@@ -2497,6 +2507,12 @@ function syncEnemies(tNow){
     }
     if(e.kind==='wronged'&&e.accuseT>0&&st!=='enter'&&st!=='fly'&&st!=='intro'){
       tmpQ.setFromAxisAngle(YAXIS,e.accuseYaw); stoop=0.08; lean=0; roll=0; headTilt=-0.2; la=-0.32; ra=-1.48; elbowR=-0.04; shoulderDrop=-0.004;
+    }
+    // Over the last stretch of floor the face comes up: the back stays bent, only the head tips back, so the
+    // expression is on screen before it goes in. Starts LOOKUP.far from the head, fully up by LOOKUP.near.
+    if(st==='walk'&&e.state==='walk'){
+      const lu=clamp((LOOKUP.far-Math.hypot(e.x-HEADW.c.x,e.z-HEADW.c.z))/(LOOKUP.far-LOOKUP.near),0,1);
+      if(lu>0){ const k=ease(lu); headTilt=lerp(headTilt,LOOKUP.tilt,k); headForward=lerp(headForward,0.002,k); headDrop=lerp(headDrop,-0.004,k); }
     }
     const massScale=e.kind==='compare'?1+0.055*Math.max(0,(e.mass||1)-1):e.kind==='lump'?1.18+0.025*Math.max(1,e.faces||1):1;
     const sc=(e.scale||1)*massScale; pv.set(e.x,e.y+bob+yOff,e.z); tmpM.compose(pv,tmpQ,tmpV2.set(sc,sc,sc));
@@ -3395,7 +3411,7 @@ function chickenLand(pr){
   const f=FOOD_BY.chicken; const x=pr.x1, z=pr.z1; SFX.chickenLand(); camShake=0.014; camShakeT=0.35;
   const cands=enemiesInRange(x,z,f.knock+0.1); cands.sort((a,b)=>Math.hypot(a.x-x,a.z-z)-Math.hypot(b.x-x,b.z-z)); let n=0; for(const e of cands){ const d=Math.hypot(e.x-x,e.z-z); if(d<f.blast&&n<f.maxKill){ damageEnemy(e,'crush',e.x-x,e.z-z,x,z); n++; } else if(d<f.knock){ const ux=(e.x-x)/(d||1), uz=(e.z-z)/(d||1); knockEnemy(e,ux,uz,1.2+(f.knock-d)*1.5); } }
   if(n) SFX.crush(); DEC.grease(x,z,0.5); burstParts(x,0.05,z,26,'#C98A2B',1.4,'crumb',0.007); zones.push({x,z,r:f.greaseR,t:f.grease,cd:0,host:pr.mesh});
-  pr.mesh.position.set(x,groundY(x,z)+0.03,z); pr.mesh.rotation.set(0,rand(0,6),rand(-0.3,0.3)); addTrash(pr.mesh,'food');
+  pr.mesh.position.set(x,groundY(x,z)+0.03,z); pr.mesh.rotation.set(0,rand(0,6),rand(-0.3,0.3)); pr.mesh.userData.saveId='chicken'; addTrash(pr.mesh,'food');
 }
 // 하루 지나면 놓아둔 음식이 상함: 일어나 나가는 동안 곰팡이 피고 주저앉음 → 문 닫히면 쓰레기로 남음
 // The old fly was one black sphere, which read as an olive or a crumb. Keep the body tiny, warm and long like a
@@ -3736,7 +3752,7 @@ function updProjs(dt){
       if(u>=1){ done=true; if(p.type==='ramen'){ ramenSplash(p.x1,p.z1); scene.remove(p.mesh); disposeRetryVisual(p.mesh,false); } else chickenLand(p); } }
     else if(p.type==='burger'){ const step=p.spd*dt; p.x+=p.dx*step; p.z+=p.dz*step; p.dist+=step; p.roll+=step/0.06; p.mesh.position.set(p.x,groundY(p.x,p.z)+0.062,p.z); p.mesh.rotation.set(0,Math.atan2(p.dx,p.dz),Math.PI/2); p.mesh.rotateOnAxis(new V3(1,0,0),p.roll);
       shQuery(p.x,p.z,0.15,(e)=>{ if(!e.alive||p.hit.has(e.id)||e.state==='dead'||e.state==='enter'||e.state==='intro'||p.hit.size>=FOOD_BY.burger.maxKill) return; p.hit.add(e.id); damageEnemy(e,'crush',p.dx,p.dz,p.x,p.z); SFX.crush(); });
-      if(p.dist>=p.max||FF.isBase(p.x+p.dx*0.08,p.z+p.dz*0.08)||inHeadZone(p.x,p.z,0.1)){ done=true; const landing=foodLandingPoint(FOOD_BY.burger,p.x,p.z,p.x-p.dx,p.z-p.dz); p.mesh.rotation.set(0,rand(0,6),0); p.mesh.position.set(landing.x,groundY(landing.x,landing.z)+0.01,landing.z); p.mesh.scale.y=0.55; addTrash(p.mesh,'food'); DEC.crumbs(landing.x,landing.z,'#F0E0C0'); } }
+      if(p.dist>=p.max||FF.isBase(p.x+p.dx*0.08,p.z+p.dz*0.08)||inHeadZone(p.x,p.z,0.1)){ done=true; const landing=foodLandingPoint(FOOD_BY.burger,p.x,p.z,p.x-p.dx,p.z-p.dz); p.mesh.rotation.set(0,rand(0,6),0); p.mesh.position.set(landing.x,groundY(landing.x,landing.z)+0.01,landing.z); p.mesh.scale.y=0.55; p.mesh.userData.saveId='burger'; addTrash(p.mesh,'food'); DEC.crumbs(landing.x,landing.z,'#F0E0C0'); } }
     else if(p.type==='pizza'){ const step=p.spd*dt; p.x+=p.dx*step; p.z+=p.dz*step; p.dist+=step; p.spin+=dt*22; p.mesh.position.set(p.x,p.y,p.z); p.mesh.rotation.set(0,p.spin,0.1);
       shQuery(p.x,p.z,0.16,(e)=>{ if(!e.alive||p.hit.has(e.id)||e.state==='dead'||e.state==='enter'||e.state==='intro'||p.hit.size>=FOOD_BY.pizza.maxKill) return; if(Math.abs(e.y-p.y)>0.25) return; p.hit.add(e.id); damageEnemy(e,'burst',p.dx,p.dz,p.x,p.z); SFX.burst(0.8); });
       if(p.dist>=p.max||p.x<ROOM.x0+0.05||p.x>ROOM.x1-0.05||p.z<ROOM.z0+0.05||p.z>ROOM.z1-0.05){ done=true; scene.remove(p.mesh); disposeRetryVisual(p.mesh,false); if(p.z>ROOM.z0&&p.z<ROOM.z1) DEC.pizzaMark(clamp(p.x,ROOM.x0+0.1,ROOM.x1-0.1),clamp(p.z,ROOM.z0+0.1,ROOM.z1-0.1)); } }
@@ -4383,7 +4399,8 @@ function snapshot(){
     floor:fctx.getImageData(0,0,floorCv.width,floorCv.height),
     trash:trash.map(cloneRetryVisual),
     faceDecals:faceDecals.map(cloneRetryVisual),
-    faceDecalIdx
+    faceDecalIdx,
+    faceDecalLog:faceDecalLog.map(r=>r.slice())
   };
   disposeSnapVisuals(old);
 }
@@ -4397,15 +4414,16 @@ function startRound(r){
   G.eaten=0; G.tear=G.tearCarry||0; G.invaders=0; G.gnawPulse=0; G.stallT=0; G.scene='play'; setStain(G.stain);
   resetTearMeterUI();
   resetDanger();
-  doorRattle=0; SFX.setMurmur(0); clearEnemies(); resetLineBags(); resetSelfHitForRound(); snapshot(); G.pendingLoanSwarm=0; hudDirty=true; showBar(true);
+  doorRattle=0; SFX.setMurmur(0); clearEnemies(); resetLineBags(); resetSelfHitForRound(); snapshot(); saveRun(); G.pendingLoanSwarm=0; hudDirty=true; showBar(true);
   if(G.rentOwed>0&&G.evictDue>=0&&G.evictDue-G.round===1) sms('집주인','월세 미납액 '+won(G.rentOwed)+'\n내일까지 입금해 주세요.');
   if(G.round%CFG.MONTH===(CFG.RENT_DAY+CFG.MONTH-3)%CFG.MONTH&&G.remindDay!==G.round){ G.remindDay=G.round; sms('은행',WEB+'3일 뒤 월세 '+won(CFG.RENT)+' 자동이체 예정입니다.'); }
   const tf=trashFill();
   if(hasCleanableMess()) sendCleaningAd();
   if(tf>=0.7&&!G.trashWarnSent){ G.trashWarnSent=true; sms('집주인','옆집에서 냄새 난다고 연락 왔어요. 정리 부탁드립니다.'); toast('방에 쓰레기가 너무 많습니다. 집청소를 부르지 않으면 점점 더 많이 몰려옵니다.',6.5); cleanWarnT=9; }
 }
-function fatAfterRound(fat,eaten){ return Math.min(1.4,fat+eaten); }
+function fatAfterRound(fat,eaten){ return Math.min(1.4,fat+eaten*CFG.FAT_RATE); }
 function newRun(){
+  clearRun();
   setEndWatcher(false);
   if(typeof DANGER!=='undefined') resetDanger();
   FALL=null; CUT=null; CRY=null; HUSH=null;
@@ -4480,6 +4498,7 @@ function restoreSnap(){
   faceDecalIdx=faceDecals.length>=40
     ?(s.faceDecalIdx||0)%faceDecals.length
     :0;
+  faceDecalLog=(s.faceDecalLog||[]).map(r=>r.slice());
 
   for(const b of beads){
     b.mesh.visible=false;
@@ -4503,6 +4522,61 @@ function restoreSnap(){
     floorDirtyT=0;
     floorTex.needsUpdate=true;
   }
+}
+
+/* ---------- the run kept across visits ----------
+   Written at the start of every day from the second on (the same point "이 판 다시" goes back to), read again from the
+   title as 이어하기, and dropped when the run ends or a new one starts. Everything the morning snapshot holds goes in,
+   the packaging and leftovers on the floor as a short description each, the blood on the face as the directions it
+   was thrown at, and the floor itself as one picture (left out if the browser's storage won't take it). */
+const RUN_KEY='spd3_run', RUN_SCALARS=['money','kills','fat','eaten','round','shift','workStreak','pendingLoanSwarm','tear','stain','debt','loanBalance','weekMiss','monthMiss','monthFood','monthBuys','monthTaxi','monthTaxiN','monthClean','rentOwed','billOwed','evictDue','saveN','saveMiss','lastStay','trashV','cleanBooked','propsGone','floorMess'];
+function trashDesc(m){ const u=m.userData, r=v=>+v.toFixed(4); return {id:u.saveId||u.foodId||'',kind:u.kind||'pack',age:u.age||0,sy0:+((u.sy0||m.scale.y).toFixed(4)),x:r(m.position.x),y:r(m.position.y),z:r(m.position.z),rx:r(m.rotation.x),ry:r(m.rotation.y),rz:r(m.rotation.z),sx:r(m.scale.x),sy:r(m.scale.y),sz:r(m.scale.z)}; }
+// a piece of trash as it lay on the morning it was saved: packaging as built, a thrown burger or chicken already dried brown
+function buildTrashFromDesc(d){
+  let m;
+  if(d.kind==='food'){
+    if(d.id!=='burger'&&d.id!=='chicken') return null;
+    m=d.id==='chicken'?chickenMesh(1):burgerMesh(1); m.userData.saveId=d.id;
+    ownMaterials(m); m.traverse(o=>{ if(o.isMesh&&o.material&&o.material.color){ const c0=o.material.color.getHex(); o.userData.c0=c0; rotColor(o.material.color,c0,1); } });
+  } else { if(!FOOD_BY[d.id]) return null; m=buildFood(d.id,false); }
+  m.position.set(d.x,d.y,d.z); m.rotation.set(d.rx,d.ry,d.rz); m.scale.set(d.sx,d.sy,d.sz);
+  m.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } });
+  scene.add(m); addTrash(m,d.kind);
+  const u=m.userData; u.age=d.age||0; u.sy0=d.sy0||m.scale.y; cacheTrashSupport(m);
+  return m;
+}
+function saveRun(){
+  if(G.round<1||!G.snap) return;
+  const s=G.snap, d={v:1,at:Date.now()};
+  for(const k of RUN_SCALARS) d[k]=s[k];
+  d.towers=s.towers; d.lumps=s.lumps; d.trash=trash.filter(m=>m.parent&&m.visible!==false).map(trashDesc); d.faceDecals=faceDecalLog.map(r=>r.slice()); d.faceDecalIdx=faceDecalIdx;
+  d.firstRentShown=!!G.firstRentShown; d.adDay=G.adDay; d.remindDay=G.remindDay; d.lastMode=G.lastMode||'';
+  let img=null;
+  try{ img=floorCv.toDataURL('image/webp',0.86); if(!/^data:image\/webp/.test(img)) img=floorCv.toDataURL('image/jpeg',0.9); }catch(e){ img=null; }
+  d.floor=img;
+  try{ localStorage.setItem(RUN_KEY,JSON.stringify(d)); }
+  catch(e){ d.floor=null; try{ localStorage.setItem(RUN_KEY,JSON.stringify(d)); }catch(e2){} }
+}
+function loadRunData(){ try{ const raw=localStorage.getItem(RUN_KEY); if(!raw) return null; const d=JSON.parse(raw); if(!d||d.v!==1||!(d.round>=1)||!Array.isArray(d.towers)) return null; return d; }catch(e){ return null; } }
+function clearRun(){ try{ localStorage.removeItem(RUN_KEY); }catch(e){} }
+// the room as the save describes it; the floor picture is drawn on top if it was kept and has finished loading
+function applyRun(d,floorImg){
+  const snap={towers:d.towers||[],lumps:d.lumps||[],trash:[],faceDecals:[],faceDecalIdx:0,faceDecalLog:[],floor:null};
+  for(const k of RUN_SCALARS) snap[k]=d[k];
+  disposeSnapVisuals(G.snap); G.snap=snap;
+  restoreSnap();
+  for(const t of d.trash||[]) buildTrashFromDesc(t);
+  rebuildRotHosts(); buildTrashPile(); syncRoaches();
+  for(const r of d.faceDecals||[]) if(Array.isArray(r)&&r.length===4) addFaceDecal(tmpV.set(r[0],r[1],r[2]),r[3]);
+  if(floorImg){ fctx.setTransform(1,0,0,1,0,0); fctx.globalAlpha=1; fctx.globalCompositeOperation='source-over'; fctx.drawImage(floorImg,0,0,floorCv.width,floorCv.height); floorDirty=false; floorDirtyT=0; floorTex.needsUpdate=true; }
+  G.firstRentShown=!!d.firstRentShown; G.adDay=Number.isFinite(d.adDay)?d.adDay:-1; G.remindDay=Number.isFinite(d.remindDay)?d.remindDay:-1; G.lastMode=d.lastMode||'';
+}
+function resumeRun(d,img){
+  const go=()=>{ newRun(); let round=d.round;
+    try{ applyRun(d,img&&img.complete&&img.naturalWidth?img:null); }
+    catch(e){ newRun(); round=0; }   // a save this build can't read: start over rather than leave the room half built
+    startRound(round); };
+  if(img&&!img.complete){ img.onload=go; img.onerror=go; } else go();
 }
 function endRound(forcedMode){
   clearAttacks();
@@ -5249,8 +5323,8 @@ function finishCryRun(c){
 }
 function updCry(dt){
   const c=CRY; c.t+=dt; const t=c.t;
-  for(let i=EN.list.length-1;i>=0;i--){ const e=EN.list[i]; if(e.state==='enter'){ e.t+=dt; e.anim+=dt*14; placeEntering(e); if(e.t>=CFG.ENTER_TIME) finishEnter(e); } }
-  updateEnterWetSound();
+  // The ones still in the room keep walking in and going under the skin while he cries (nothing fires any more).
+  updEnemies(dt);
   for(let i=0;i<2;i++){ const B=beads[i], s=B.side; const cornerD=new V3(s*0.66,0.86,-0.12).normalize(), earD=new V3(s*0.98,-0.02,-0.08).normalize();
     if(t<0.6){ const k=t/0.6; B.mesh.visible=true; const p=surfPointW(cornerD); B.mesh.position.copy(p); B.mesh.scale.setScalar(0.004+k*0.006); }
     else if(t<1.9){ const k=easeIn((t-0.6)/1.3); const d=cornerD.clone().lerp(earD,k).normalize(); const p=surfPointW(d); B.mesh.position.copy(p); B.mesh.scale.setScalar(0.009);
@@ -5706,16 +5780,22 @@ ${flag(22,-1)}${flag(398,1)}
 
 
 
-function showTitle(){ setEndWatcher(false); overlayEl.innerHTML=`<div class="box titleBox">${TITLE_SVG}<div class="btn" id="btnStart">시작</div></div>`;
+function showTitle(){ setEndWatcher(false);
+  // A run saved from an earlier visit puts 이어하기 first; the floor picture starts loading now so it's ready on the tap.
+  const saved=loadRunData(); let savedImg=null;
+  if(saved&&saved.floor){ try{ savedImg=new Image(); savedImg.src=saved.floor; }catch(e){ savedImg=null; } }
+  overlayEl.innerHTML=`<div class="box titleBox">${TITLE_SVG}${saved?`<div class="btn" id="btnResume">이어하기 · ${saved.round+1}일</div><div class="btn alt" id="btnStart">처음부터</div>`:`<div class="btn" id="btnStart">시작</div>`}</div>`;
   const glint=overlayEl.querySelector('.lgGlint');
   // An idle sweep reaches the letters 0.52 s in. Browsers keep sound off until the first touch, so these ring only after one.
   const ring=e=>{ if(e.animationName==='lgGlint'&&!titleGo&&AC&&AC.state==='running') SFX.shing(0.55-SHING.tR); };
   glint.addEventListener('animationstart',ring); glint.addEventListener('animationiteration',ring);
   setTimeout(shingPrep,700);
-  // 시작 draws the sword: one quick sweep that meets the letters as the blade comes free, then the game starts.
-  $('btnStart').addEventListener('pointerdown',ev=>{ ev.stopPropagation(); if(titleGo) return; titleGo=true; audioInit();
-    ev.currentTarget.classList.add('pressed'); glint.classList.add('go'); SFX.shing(0);
-    setTimeout(()=>{ titleGo=false; overlayEl.innerHTML=''; clearEnemies(); newRun(); startRound(0); },780); }); }
+  // Either button draws the sword: one quick sweep that meets the letters as the blade comes free, then the game starts.
+  const begin=(btn,fn)=>btn.addEventListener('pointerdown',ev=>{ ev.stopPropagation(); if(titleGo) return; titleGo=true; audioInit();
+    btn.classList.add('pressed'); glint.classList.add('go'); SFX.shing(0);
+    setTimeout(()=>{ titleGo=false; overlayEl.innerHTML=''; clearEnemies(); fn(); },780); });
+  begin($('btnStart'),()=>{ newRun(); startRound(0); });
+  const resume=$('btnResume'); if(resume) begin(resume,()=>resumeRun(saved,savedImg)); }
 
 function billRound(v){ return Math.round(v/10000)*10000; }
 function makeEvictionBill(){
@@ -5791,7 +5871,7 @@ function emptyRoom(on,keepHud=false){ G.empty=on; const v=!on;
     windowPane.material.color.setHex(0xE5BD91); windowMoon.visible=false; $('hud').classList.toggle('hush',!keepHud); }
   else { $('hud').classList.remove('hush'); setStain(G.stain); }
 }
-function showGameOver(o){ o=o||{}; const empty=!!o.empty, now=G.round+1; setEndWatcher(!!o.watcher); showBar(false); if(!o.keepSms) smsClear(); if(!empty&&!o.noWorkSms) sms('근무 알림',WEB+'금일 야간 근무 확정되었습니다.\n00:00 - 09:00',{sticky:true}); G.scene='over'; const rec=o.refund===undefined?`출근 ${G.shift}회 · 최다 ${bestShift}회`:`${now}일째 · 출근 ${G.shift}회 · 보증금 잔액 ${won(o.refund)}`; overlayEl.innerHTML=`<div class="box gameOverBox"><div class="gameOverRec">${rec}</div><div class="btn alt" id="btnRetry">이 판 다시</div><div class="btn" id="btnRestart">처음부터</div></div>`;
+function showGameOver(o){ o=o||{}; const empty=!!o.empty, now=G.round+1; clearRun(); setEndWatcher(!!o.watcher); showBar(false); if(!o.keepSms) smsClear(); if(!empty&&!o.noWorkSms) sms('근무 알림',WEB+'금일 야간 근무 확정되었습니다.\n00:00 - 09:00',{sticky:true}); G.scene='over'; const rec=o.refund===undefined?`출근 ${G.shift}회 · 최다 ${bestShift}회`:`${now}일째 · 출근 ${G.shift}회 · 보증금 잔액 ${won(o.refund)}`; overlayEl.innerHTML=`<div class="box gameOverBox"><div class="gameOverRec">${rec}</div><div class="btn alt" id="btnRetry">이 판 다시</div><div class="btn" id="btnRestart">처음부터</div></div>`;
   $('btnRetry').addEventListener('pointerdown',ev=>{ ev.stopPropagation(); SFX.click(); overlayEl.innerHTML=''; restoreSnap(); startRound(G.snap.round); });
   $('btnRestart').addEventListener('pointerdown',ev=>{ ev.stopPropagation(); SFX.click(); overlayEl.innerHTML=''; clearEnemies(); newRun(); startRound(0); }); }
 
@@ -5919,7 +5999,7 @@ function step(dt){
   else if(G.scene==='hush') updHush(dt);
   else if(G.scene==='cry') updCry(dt);
   else if(G.scene==='title'){ updEnemies(dt); updParts(dt); }
-  else if(G.scene==='over'){ updParts(dt); }
+  else if(G.scene==='over'){ updParts(dt); updEnemies(dt); }   // after the crying ends the last of them still come in; the other endings have cleared the room
   else if(G.scene==='bankrupt'){ updParts(dt); updBankruptcyMontage(dt); }
   else if(G.scene==='evict'){ updParts(dt); updEvict(dt); }
   updSelfHitWaves(dt); updUltAfter(dt);
@@ -6006,7 +6086,7 @@ async function boot(){
 boot();
 
 /* debug / balance hooks */
-window.__dbg={ G, EN, get towers(){return towers;}, get projs(){return projs;}, get lumps(){return lumps;}, get trash(){return trash;}, get roaches(){return ROACH.list;}, get flyCounts(){return {bodies:FLY_IM.count,wings:FLY_WING_IM.count};}, get floorMess(){return floorMess;}, get reels(){return {active:REELS.active,visible:REELS.g.visible,floorPhone:PHONEG.g.visible};}, get watcher(){return {visible:!!WING.watcher?.visible,k:WING.watchK||0,target:WING.watchTarget||0,talk:WING.talkT,tsk:!!TSK.buf};}, FF, FS, CFG, FOODS, cam:camBase, camera, applyCamera, GI, scene, THREE, drawEye, step, spawnFrom, BATHG, WING, startRound, buildSpawns, roundPlan, cleanQuote, loanNeed, hasCleanableMess, buildFood, makeLump, cleanNow:cleanRoomNow, floorBloodAt, get CUT(){return CUT;}, updCut, placeValid, isStaticBlocked,
+window.__dbg={ G, EN, saveRun, loadRunData, clearRun, resumeRun, applyRun, get towers(){return towers;}, get projs(){return projs;}, get lumps(){return lumps;}, get trash(){return trash;}, get roaches(){return ROACH.list;}, get flyCounts(){return {bodies:FLY_IM.count,wings:FLY_WING_IM.count};}, get floorMess(){return floorMess;}, get reels(){return {active:REELS.active,visible:REELS.g.visible,floorPhone:PHONEG.g.visible};}, get watcher(){return {visible:!!WING.watcher?.visible,k:WING.watchK||0,target:WING.watchTarget||0,talk:WING.talkT,tsk:!!TSK.buf};}, FF, FS, CFG, FOODS, cam:camBase, camera, applyCamera, GI, scene, THREE, drawEye, step, spawnFrom, BATHG, WING, startRound, buildSpawns, roundPlan, cleanQuote, loanNeed, hasCleanableMess, buildFood, makeLump, cleanNow:cleanRoomNow, floorBloodAt, get CUT(){return CUT;}, updCut, placeValid, isStaticBlocked,
   start(r){ overlayEl.innerHTML=''; clearEnemies(); newRun(); G.shift=r||0; startRound(r||0); },
   loan:takeLoan, clean:bookCleaning,
   evictionBill:makeEvictionBill, settleEviction:settleEvictionBill,

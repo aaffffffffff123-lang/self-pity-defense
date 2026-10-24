@@ -2959,79 +2959,88 @@ function squashTinted(s,kind){
 /* =========================================================
    FOOD MODELS
    ========================================================= */
+// Food shapes are built once and shared between every copy (a kimbap's extruded triangle took a few ms to build and
+// was rebuilt eight times per placement). Nothing edits these after creation: baking copies them, and disposing a
+// copy's owner only drops its GPU buffer, which is re-sent the next time the shape is drawn.
+const FOOD_GEO=new Map();
+function FG(key,make){ let g=FOOD_GEO.get(key); if(!g){ g=make(); g.userData.shared=true; FOOD_GEO.set(key,g); } return g; }
 function kimbapMesh(s){
   s=s||1;
   const g=new THREE.Group();
 
-  const tri=new THREE.Shape();
-  tri.moveTo(-0.045*s,-0.038*s);
-  tri.lineTo(0.045*s,-0.038*s);
-  tri.lineTo(0,0.045*s);
-  tri.closePath();
-
-  const shellGeo=new THREE.ExtrudeGeometry(tri,{
-    depth:0.028*s,
-    bevelEnabled:true,
-    bevelThickness:0.004*s,
-    bevelSize:0.004*s,
-    bevelSegments:2
+  const shellGeo=FG('kShell'+s,()=>{
+    const tri=new THREE.Shape();
+    tri.moveTo(-0.045*s,-0.038*s);
+    tri.lineTo(0.045*s,-0.038*s);
+    tri.lineTo(0,0.045*s);
+    tri.closePath();
+    const geo=new THREE.ExtrudeGeometry(tri,{
+      depth:0.028*s,
+      bevelEnabled:true,
+      bevelThickness:0.004*s,
+      bevelSize:0.004*s,
+      bevelSegments:2
+    });
+    geo.translate(0,0,-0.014*s);
+    return geo;
   });
-  shellGeo.translate(0,0,-0.014*s);
   g.add(mesh(shellGeo,M.gim,0,0,0));
 
-  const riceTri=new THREE.Shape();
-  riceTri.moveTo(-0.024*s,-0.002*s);
-  riceTri.lineTo(0.024*s,-0.002*s);
-  riceTri.lineTo(0,0.034*s);
-  riceTri.closePath();
-
-  const riceGeo=new THREE.ShapeGeometry(riceTri);
+  const riceGeo=FG('kRice'+s,()=>{
+    const riceTri=new THREE.Shape();
+    riceTri.moveTo(-0.024*s,-0.002*s);
+    riceTri.lineTo(0.024*s,-0.002*s);
+    riceTri.lineTo(0,0.034*s);
+    riceTri.closePath();
+    return new THREE.ShapeGeometry(riceTri);
+  });
   const riceFront=mesh(riceGeo,M.rice,0,0,0.0185*s);
-  const riceBack=mesh(riceGeo.clone(),M.rice,0,0,-0.0185*s);
+  const riceBack=mesh(riceGeo,M.rice,0,0,-0.0185*s);
   riceBack.rotation.y=Math.PI;
   g.add(riceFront,riceBack);
 
   g.add(mesh(
-    new THREE.BoxGeometry(0.026*s,0.015*s,0.039*s),
+    FG('kBox'+s,()=>new THREE.BoxGeometry(0.026*s,0.015*s,0.039*s)),
     M.red,0,-0.019*s,0
   ));
 
   return g;
 }
-function fryMesh(){ return mesh(new THREE.BoxGeometry(0.009,0.075,0.009),M.fry,0,0,0); }
-function burgerMesh(s){ s=s||1; const g=new THREE.Group(); g.add(mesh(new THREE.CylinderGeometry(0.06*s,0.062*s,0.018*s,20),M.bun,0,0.009*s,0)); const patty=mesh(new THREE.CylinderGeometry(0.062*s,0.062*s,0.018*s,20),M.patty,0,0.027*s,0); g.add(patty); const ch=mesh(new THREE.BoxGeometry(0.12*s,0.006*s,0.12*s),M.cheese,0,0.039*s,0); ch.rotation.y=0.3; g.add(ch); const let_=mesh(new THREE.CylinderGeometry(0.07*s,0.066*s,0.012*s,12),M.lettuce,0,0.047*s,0); g.add(let_); const top=mesh(new THREE.SphereGeometry(0.062*s,20,12,0,Math.PI*2,0,Math.PI/2),M.bun,0,0.05*s,0); top.scale.y=0.7; g.add(top); for(let i=0;i<6;i++){ const se=mesh(new THREE.SphereGeometry(0.004*s,6,5),M.rice,rand(-0.035,0.035)*s,0.088*s,rand(-0.035,0.035)*s); g.add(se); } return g; }
-function pizzaSliceMesh(angle=Math.PI/3){ const g=new THREE.Group(); const base=mesh(new THREE.CylinderGeometry(0.15,0.15,0.012,1,1,false,0,angle),M.pizzaBase,0,0,0); g.add(base); const sauce=mesh(new THREE.CylinderGeometry(0.135,0.135,0.006,1,1,false,0.03,angle-0.06),M.pizzaSauce,0,0.008,0); g.add(sauce); for(let i=0;i<3;i++){ const r=0.05+i*0.032, a=0.15+i*0.12; const p=mesh(new THREE.CylinderGeometry(0.016,0.016,0.006,10),M.pepperoni,Math.cos(a)*r,0.013,Math.sin(a)*r); g.add(p); } return g; }
-function chickenMesh(s){ s=s||1; const g=new THREE.Group(); const body=ellipsoid(0.085*s,0.06*s,0.11*s,M.chicken,16); body.position.y=0.06*s; g.add(body); for(const sd of [-1,1]){ const th=ellipsoid(0.04*s,0.035*s,0.05*s,M.chickenD,12); th.position.set(sd*0.075*s,0.05*s,0.03*s); g.add(th); const leg=mesh(new THREE.CylinderGeometry(0.008*s,0.012*s,0.07*s,8),M.chicken,sd*0.09*s,0.075*s,0.075*s); leg.rotation.x=-1.0; leg.rotation.z=sd*0.5; g.add(leg); const kn=mesh(new THREE.SphereGeometry(0.014*s,8,6),M.bone,sd*0.11*s,0.1*s,0.1*s); g.add(kn); } for(const sd of [-1,1]){ const w=ellipsoid(0.035*s,0.025*s,0.06*s,M.chickenD,10); w.position.set(sd*0.08*s,0.085*s,-0.03*s); g.add(w); } return g; }
+function fryMesh(){ return mesh(FG('fry',()=>new THREE.BoxGeometry(0.009,0.075,0.009)),M.fry,0,0,0); }
+function burgerMesh(s){ s=s||1; const g=new THREE.Group(); g.add(mesh(FG('bBun'+s,()=>new THREE.CylinderGeometry(0.06*s,0.062*s,0.018*s,20)),M.bun,0,0.009*s,0)); const patty=mesh(FG('bPatty'+s,()=>new THREE.CylinderGeometry(0.062*s,0.062*s,0.018*s,20)),M.patty,0,0.027*s,0); g.add(patty); const ch=mesh(FG('bCheese'+s,()=>new THREE.BoxGeometry(0.12*s,0.006*s,0.12*s)),M.cheese,0,0.039*s,0); ch.rotation.y=0.3; g.add(ch); const let_=mesh(FG('bLettuce'+s,()=>new THREE.CylinderGeometry(0.07*s,0.066*s,0.012*s,12)),M.lettuce,0,0.047*s,0); g.add(let_); const top=mesh(FG('bTop'+s,()=>new THREE.SphereGeometry(0.062*s,20,12,0,Math.PI*2,0,Math.PI/2)),M.bun,0,0.05*s,0); top.scale.y=0.7; g.add(top); for(let i=0;i<6;i++){ const se=mesh(FG('bSeed'+s,()=>new THREE.SphereGeometry(0.004*s,6,5)),M.rice,rand(-0.035,0.035)*s,0.088*s,rand(-0.035,0.035)*s); g.add(se); } return g; }
+function pizzaSliceMesh(angle=Math.PI/3){ const g=new THREE.Group(), ak=angle.toFixed(4); const base=mesh(FG('pzBase'+ak,()=>new THREE.CylinderGeometry(0.15,0.15,0.012,1,1,false,0,angle)),M.pizzaBase,0,0,0); g.add(base); const sauce=mesh(FG('pzSauce'+ak,()=>new THREE.CylinderGeometry(0.135,0.135,0.006,1,1,false,0.03,angle-0.06)),M.pizzaSauce,0,0.008,0); g.add(sauce); for(let i=0;i<3;i++){ const r=0.05+i*0.032, a=0.15+i*0.12; const p=mesh(FG('pzPep',()=>new THREE.CylinderGeometry(0.016,0.016,0.006,10)),M.pepperoni,Math.cos(a)*r,0.013,Math.sin(a)*r); g.add(p); } return g; }
+function sharedEllipsoid(rx,ry,rz,mat,seg){ const m=new THREE.Mesh(FG('sph'+seg,()=>new THREE.SphereGeometry(1,seg,Math.round(seg*0.7))),mat); m.scale.set(rx,ry,rz); m.castShadow=true; m.receiveShadow=true; return m; }
+function chickenMesh(s){ s=s||1; const g=new THREE.Group(); const body=sharedEllipsoid(0.085*s,0.06*s,0.11*s,M.chicken,16); body.position.y=0.06*s; g.add(body); for(const sd of [-1,1]){ const th=sharedEllipsoid(0.04*s,0.035*s,0.05*s,M.chickenD,12); th.position.set(sd*0.075*s,0.05*s,0.03*s); g.add(th); const leg=mesh(FG('chLeg'+s,()=>new THREE.CylinderGeometry(0.008*s,0.012*s,0.07*s,8)),M.chicken,sd*0.09*s,0.075*s,0.075*s); leg.rotation.x=-1.0; leg.rotation.z=sd*0.5; g.add(leg); const kn=mesh(FG('chKnob'+s,()=>new THREE.SphereGeometry(0.014*s,8,6)),M.bone,sd*0.11*s,0.1*s,0.1*s); g.add(kn); } for(const sd of [-1,1]){ const w=sharedEllipsoid(0.035*s,0.025*s,0.06*s,M.chickenD,10); w.position.set(sd*0.08*s,0.085*s,-0.03*s); g.add(w); } return g; }
 // Food is assembled at the origin. Seat a rotated discard by its actual bounds instead of guessing its centre height.
 function settleFoodOnFloor(o,y=.002){ o.updateWorldMatrix(true,true); const b=new THREE.Box3().setFromObject(o); if(Number.isFinite(b.min.y)) o.position.y+=y-b.min.y; }
 function buildFood(id, full){
   const g=new THREE.Group(); g.userData.foodId=id;
-  if(id==='kimbap'){ if(full){ const bag=mesh(roundedBox(0.19,0.11,0.15,0.04,2),M.bag,0,0,0); g.add(bag); const n=FOOD_BY.kimbap.ammo; for(let i=0;i<n;i++){ const row=Math.floor(i/4), col=i%4, k=kimbapMesh(.63); k.userData.ammoUnit=true; k.position.set((col-1.5)*.043,.087+row*.018,(row?-.034:.034)+rand(-.006,.006)); k.rotation.y=rand(-.22,.22); k.rotation.z=rand(-.10,.10); g.add(k); } } else { const bag=mesh(roundedBox(0.2,0.025,0.16,0.04,2),M.bag,0,0,0); bag.rotation.y=0.3; g.add(bag); g.add(mesh(new THREE.BoxGeometry(0.05,0.006,0.04),M.gim,0.05,0.004,0.03)); } }
-  else if(id==='ramen'){ if(full){ g.add(mesh(new THREE.CylinderGeometry(0.048,0.037,0.095,20,1,true),M.ramenCup,0,0.0475,0)); g.add(mesh(new THREE.CylinderGeometry(0.0492,0.0452,0.032,20,1,true),M.red,0,0.058,0)); const lid=mesh(new THREE.CylinderGeometry(0.05,0.05,0.004,20),M.ramenCup,0,0.098,0); lid.rotation.x=-0.5; lid.position.z=-0.02; lid.position.y=0.11; g.add(lid); const fill=new THREE.Group(); fill.name='ramenFill'; fill.position.y=0.092; g.add(fill); fill.add(mesh(new THREE.CylinderGeometry(0.045,0.045,0.006,16),M.ramenSoup,0,0,0)); for(let i=0;i<4;i++){ const n=mesh(new THREE.TorusGeometry(0.012,0.004,6,10),M.ramenNoodle,rand(-0.02,0.02),0.003,rand(-0.02,0.02)); n.userData.ammoUnit=true; n.rotation.x=Math.PI/2; fill.add(n); } } else { const emptyCup=new THREE.Group(); emptyCup.rotation.set(0,.5,Math.PI/2-.15); const cup=mesh(new THREE.CylinderGeometry(.048,.037,.095,20,1,true),M.ramenCup,0,0,0); emptyCup.add(cup); const band=mesh(new THREE.CylinderGeometry(.0492,.0452,.032,20,1,true),M.red,0,.0105,0); emptyCup.add(band); const rim=mesh(new THREE.TorusGeometry(.049,.003,5,20),M.red,0,.049,0); rim.rotation.x=Math.PI/2; emptyCup.add(rim); const bottom=mesh(new THREE.CircleGeometry(.037,20),M.ramenCup,0,-.0475,0); bottom.rotation.x=Math.PI/2; emptyCup.add(bottom); g.add(emptyCup); settleFoodOnFloor(emptyCup); } }
-  else if(id==='fries'){ if(full){ g.add(mesh(new THREE.BoxGeometry(0.09,0.085,0.045),M.red,0,0.0425,0)); g.add(mesh(new THREE.BoxGeometry(0.096,0.02,0.05),M.red,0,0.085,0)); g.add(mesh(new THREE.BoxGeometry(0.03,0.02,0.002),M.yellow,0,0.05,0.024)); const n=FOOD_BY.fries.ammo; for(let i=0;i<n;i++){ const f=fryMesh(); f.userData.ammoUnit=true; f.position.set((i-(n-1)/2)*.0085,0.11+rand(-0.01,0.015),rand(-0.012,0.012)); f.rotation.z=rand(-0.25,0.25); f.rotation.x=rand(-0.2,0.2); g.add(f); } } else { const box=mesh(new THREE.BoxGeometry(0.09,0.03,0.05),M.red,0,0.015,0); box.rotation.y=0.6; g.add(box); const f=fryMesh(); f.rotation.z=Math.PI/2; f.position.set(0.05,0.006,0.03); g.add(f); } }
+  if(id==='kimbap'){ if(full){ const bag=mesh(FG('roundedBox(0.19,0.11,0.15,0.04,2)',()=>roundedBox(0.19,0.11,0.15,0.04,2)),M.bag,0,0,0); g.add(bag); const n=FOOD_BY.kimbap.ammo; for(let i=0;i<n;i++){ const row=Math.floor(i/4), col=i%4, k=kimbapMesh(.63); k.userData.ammoUnit=true; k.position.set((col-1.5)*.043,.087+row*.018,(row?-.034:.034)+rand(-.006,.006)); k.rotation.y=rand(-.22,.22); k.rotation.z=rand(-.10,.10); g.add(k); } } else { const bag=mesh(FG('roundedBox(0.2,0.025,0.16,0.04,2)',()=>roundedBox(0.2,0.025,0.16,0.04,2)),M.bag,0,0,0); bag.rotation.y=0.3; g.add(bag); g.add(mesh(FG('newTHREE.BoxGeometry(0.05,0.006,0.04)',()=>new THREE.BoxGeometry(0.05,0.006,0.04)),M.gim,0.05,0.004,0.03)); } }
+  else if(id==='ramen'){ if(full){ g.add(mesh(FG('newTHREE.CylinderGeometry(0.048,0.037,0.095,20,1,true)',()=>new THREE.CylinderGeometry(0.048,0.037,0.095,20,1,true)),M.ramenCup,0,0.0475,0)); g.add(mesh(FG('newTHREE.CylinderGeometry(0.0492,0.0452,0.032,20,1,true)',()=>new THREE.CylinderGeometry(0.0492,0.0452,0.032,20,1,true)),M.red,0,0.058,0)); const lid=mesh(FG('newTHREE.CylinderGeometry(0.05,0.05,0.004,20)',()=>new THREE.CylinderGeometry(0.05,0.05,0.004,20)),M.ramenCup,0,0.098,0); lid.rotation.x=-0.5; lid.position.z=-0.02; lid.position.y=0.11; g.add(lid); const fill=new THREE.Group(); fill.name='ramenFill'; fill.position.y=0.092; g.add(fill); fill.add(mesh(FG('newTHREE.CylinderGeometry(0.045,0.045,0.006,16)',()=>new THREE.CylinderGeometry(0.045,0.045,0.006,16)),M.ramenSoup,0,0,0)); for(let i=0;i<4;i++){ const n=mesh(FG('newTHREE.TorusGeometry(0.012,0.004,6,10)',()=>new THREE.TorusGeometry(0.012,0.004,6,10)),M.ramenNoodle,rand(-0.02,0.02),0.003,rand(-0.02,0.02)); n.userData.ammoUnit=true; n.rotation.x=Math.PI/2; fill.add(n); } } else { const emptyCup=new THREE.Group(); emptyCup.rotation.set(0,.5,Math.PI/2-.15); const cup=mesh(FG('newTHREE.CylinderGeometry(.048,.037,.095,20,1,true)',()=>new THREE.CylinderGeometry(.048,.037,.095,20,1,true)),M.ramenCup,0,0,0); emptyCup.add(cup); const band=mesh(FG('newTHREE.CylinderGeometry(.0492,.0452,.032,20,1,true)',()=>new THREE.CylinderGeometry(.0492,.0452,.032,20,1,true)),M.red,0,.0105,0); emptyCup.add(band); const rim=mesh(FG('newTHREE.TorusGeometry(.049,.003,5,20)',()=>new THREE.TorusGeometry(.049,.003,5,20)),M.red,0,.049,0); rim.rotation.x=Math.PI/2; emptyCup.add(rim); const bottom=mesh(FG('newTHREE.CircleGeometry(.037,20)',()=>new THREE.CircleGeometry(.037,20)),M.ramenCup,0,-.0475,0); bottom.rotation.x=Math.PI/2; emptyCup.add(bottom); g.add(emptyCup); settleFoodOnFloor(emptyCup); } }
+  else if(id==='fries'){ if(full){ g.add(mesh(FG('newTHREE.BoxGeometry(0.09,0.085,0.045)',()=>new THREE.BoxGeometry(0.09,0.085,0.045)),M.red,0,0.0425,0)); g.add(mesh(FG('newTHREE.BoxGeometry(0.096,0.02,0.05)',()=>new THREE.BoxGeometry(0.096,0.02,0.05)),M.red,0,0.085,0)); g.add(mesh(FG('newTHREE.BoxGeometry(0.03,0.02,0.002)',()=>new THREE.BoxGeometry(0.03,0.02,0.002)),M.yellow,0,0.05,0.024)); const n=FOOD_BY.fries.ammo; for(let i=0;i<n;i++){ const f=fryMesh(); f.userData.ammoUnit=true; f.position.set((i-(n-1)/2)*.0085,0.11+rand(-0.01,0.015),rand(-0.012,0.012)); f.rotation.z=rand(-0.25,0.25); f.rotation.x=rand(-0.2,0.2); g.add(f); } } else { const box=mesh(FG('newTHREE.BoxGeometry(0.09,0.03,0.05)',()=>new THREE.BoxGeometry(0.09,0.03,0.05)),M.red,0,0.015,0); box.rotation.y=0.6; g.add(box); const f=fryMesh(); f.rotation.z=Math.PI/2; f.position.set(0.05,0.006,0.03); g.add(f); } }
   else if(id==='cola'){
   if(full){
     g.add(mesh(
-      new THREE.CylinderGeometry(0.045,0.043,0.24,18),
+      FG('newTHREE.CylinderGeometry(0.045,0.043,0.24,18)',()=>new THREE.CylinderGeometry(0.045,0.043,0.24,18)),
       M.colaBottle,0,0.12,0
     ));
 
     const fill=mesh(
-      new THREE.CylinderGeometry(0.041,0.039,0.216,18),
+      FG('newTHREE.CylinderGeometry(0.041,0.039,0.216,18)',()=>new THREE.CylinderGeometry(0.041,0.039,0.216,18)),
       M.colaBody,0,0.108,0
     );
     fill.name='colaFill';
     g.add(fill);
 
-    g.add(mesh(new THREE.CylinderGeometry(0.0455,0.0455,0.07,18),M.colaLabel,0,0.12,0));
-    g.add(mesh(new THREE.CylinderGeometry(0.018,0.045,0.05,18),M.colaBottle,0,0.265,0));
-    g.add(mesh(new THREE.CylinderGeometry(0.018,0.018,0.03,12),M.colaCap,0,0.3,0));
+    g.add(mesh(FG('newTHREE.CylinderGeometry(0.0455,0.0455,0.07,18)',()=>new THREE.CylinderGeometry(0.0455,0.0455,0.07,18)),M.colaLabel,0,0.12,0));
+    g.add(mesh(FG('newTHREE.CylinderGeometry(0.018,0.045,0.05,18)',()=>new THREE.CylinderGeometry(0.018,0.045,0.05,18)),M.colaBottle,0,0.265,0));
+    g.add(mesh(FG('newTHREE.CylinderGeometry(0.018,0.018,0.03,12)',()=>new THREE.CylinderGeometry(0.018,0.018,0.03,12)),M.colaCap,0,0.3,0));
   } else {
     const bottle=new THREE.Group(); bottle.rotation.set(0,.7,Math.PI/2);
-    bottle.add(mesh(new THREE.CylinderGeometry(.045,.043,.24,18),M.colaBottle,0,0,0));
-    bottle.add(mesh(new THREE.CylinderGeometry(.0455,.0455,.07,18),M.colaLabel,0,0,0));
-    bottle.add(mesh(new THREE.CylinderGeometry(.018,.045,.05,18),M.colaBottle,0,.145,0));
-    bottle.add(mesh(new THREE.CylinderGeometry(.018,.018,.03,12),M.colaCap,0,.18,0));
+    bottle.add(mesh(FG('newTHREE.CylinderGeometry(.045,.043,.24,18)',()=>new THREE.CylinderGeometry(.045,.043,.24,18)),M.colaBottle,0,0,0));
+    bottle.add(mesh(FG('newTHREE.CylinderGeometry(.0455,.0455,.07,18)',()=>new THREE.CylinderGeometry(.0455,.0455,.07,18)),M.colaLabel,0,0,0));
+    bottle.add(mesh(FG('newTHREE.CylinderGeometry(.018,.045,.05,18)',()=>new THREE.CylinderGeometry(.018,.045,.05,18)),M.colaBottle,0,.145,0));
+    bottle.add(mesh(FG('newTHREE.CylinderGeometry(.018,.018,.03,12)',()=>new THREE.CylinderGeometry(.018,.018,.03,12)),M.colaCap,0,.18,0));
     g.add(bottle); settleFoodOnFloor(bottle);
   }
 }
@@ -3040,11 +3049,11 @@ function buildFood(id, full){
       // An open, handleless kraft delivery bag. The lower front wall keeps the contents readable
       // from the game camera; four units make the visible stock follow ammo 4 -> 3 -> 2 -> 1.
       const bag=new THREE.Group();
-      const bottom=mesh(new THREE.BoxGeometry(0.19,0.01,0.13),M.paperBag,0,0.005,0);
-      const front=mesh(new THREE.BoxGeometry(0.20,0.09,0.012),M.paperBag,0,0.045,0.067);
-      const back=mesh(new THREE.BoxGeometry(0.20,0.125,0.012),M.paperBag,0,0.0625,-0.067);
-      const left=mesh(new THREE.BoxGeometry(0.012,0.11,0.14),M.paperBag,-0.094,0.055,0);
-      const right=mesh(new THREE.BoxGeometry(0.012,0.11,0.14),M.paperBag,0.094,0.055,0);
+      const bottom=mesh(FG('newTHREE.BoxGeometry(0.19,0.01,0.13)',()=>new THREE.BoxGeometry(0.19,0.01,0.13)),M.paperBag,0,0.005,0);
+      const front=mesh(FG('newTHREE.BoxGeometry(0.20,0.09,0.012)',()=>new THREE.BoxGeometry(0.20,0.09,0.012)),M.paperBag,0,0.045,0.067);
+      const back=mesh(FG('newTHREE.BoxGeometry(0.20,0.125,0.012)',()=>new THREE.BoxGeometry(0.20,0.125,0.012)),M.paperBag,0,0.0625,-0.067);
+      const left=mesh(FG('newTHREE.BoxGeometry(0.012,0.11,0.14)',()=>new THREE.BoxGeometry(0.012,0.11,0.14)),M.paperBag,-0.094,0.055,0);
+      const right=mesh(FG('newTHREE.BoxGeometry(0.012,0.11,0.14)',()=>new THREE.BoxGeometry(0.012,0.11,0.14)),M.paperBag,0.094,0.055,0);
 
       front.rotation.x=0.05;
       back.rotation.x=-0.05;
@@ -3058,11 +3067,11 @@ function buildFood(id, full){
         [0,0.090,0.066,0.035],
         [0.066,0.094,0.068,-0.025]
       ]){
-        const lip=mesh(new THREE.BoxGeometry(w,0.011,0.016),M.paperBag,x,y,0.071);
+        const lip=mesh(FG('bLip'+w,()=>new THREE.BoxGeometry(w,0.011,0.016)),M.paperBag,x,y,0.071);
         lip.rotation.z=r;
         bag.add(lip);
       }
-      const backLip=mesh(new THREE.BoxGeometry(0.196,0.011,0.016),M.paperBag,0,0.126,-0.071);
+      const backLip=mesh(FG('newTHREE.BoxGeometry(0.196,0.011,0.016)',()=>new THREE.BoxGeometry(0.196,0.011,0.016)),M.paperBag,0,0.126,-0.071);
       backLip.rotation.z=-0.018;
       bag.add(backLip);
       g.add(bag);
@@ -3086,7 +3095,7 @@ function buildFood(id, full){
 
         // Open low-poly paper sleeve around the lower half, rather than a little rigid box.
         unit.add(mesh(
-          new THREE.CylinderGeometry(0.038,0.034,0.03,8,1,true),
+          FG('newTHREE.CylinderGeometry(0.038,0.034,0.03,8,1,true)',()=>new THREE.CylinderGeometry(0.038,0.034,0.03,8,1,true)),
           M.receipt,0,0.015,0
         ));
 
@@ -3096,12 +3105,12 @@ function buildFood(id, full){
           b=burgerMesh(0.55);
         }else{
           b=new THREE.Group();
-          b.add(mesh(new THREE.CylinderGeometry(0.034,0.035,0.011,12),M.patty,0,0.0055,0));
-          const cheese=mesh(new THREE.BoxGeometry(0.065,0.004,0.065),M.cheese,0,0.013,0);
+          b.add(mesh(FG('newTHREE.CylinderGeometry(0.034,0.035,0.011,12)',()=>new THREE.CylinderGeometry(0.034,0.035,0.011,12)),M.patty,0,0.0055,0));
+          const cheese=mesh(FG('newTHREE.BoxGeometry(0.065,0.004,0.065)',()=>new THREE.BoxGeometry(0.065,0.004,0.065)),M.cheese,0,0.013,0);
           cheese.rotation.y=0.28;
           b.add(cheese);
-          b.add(mesh(new THREE.CylinderGeometry(0.036,0.034,0.008,10),M.lettuce,0,0.019,0));
-          const bun=mesh(new THREE.SphereGeometry(0.035,12,7,0,Math.PI*2,0,Math.PI/2),M.bun,0,0.021,0);
+          b.add(mesh(FG('newTHREE.CylinderGeometry(0.036,0.034,0.008,10)',()=>new THREE.CylinderGeometry(0.036,0.034,0.008,10)),M.lettuce,0,0.019,0));
+          const bun=mesh(FG('newTHREE.SphereGeometry(0.035,12,7,0,Math.PI*2,0,Math.PI/2)',()=>new THREE.SphereGeometry(0.035,12,7,0,Math.PI*2,0,Math.PI/2)),M.bun,0,0.021,0);
           bun.scale.y=0.7;
           b.add(bun);
         }
@@ -3110,16 +3119,16 @@ function buildFood(id, full){
         g.add(unit);
       }
     }else{
-      const bag=mesh(roundedBox(0.19,0.05,0.14,0.02,2),M.paperBag,0,0,0);
+      const bag=mesh(FG('roundedBox(0.19,0.05,0.14,0.02,2)',()=>roundedBox(0.19,0.05,0.14,0.02,2)),M.paperBag,0,0,0);
       bag.rotation.y=-0.4;
       g.add(bag);
-      g.add(mesh(new THREE.BoxGeometry(0.06,0.004,0.06),M.receipt,0.06,0.003,0.04));
+      g.add(mesh(FG('newTHREE.BoxGeometry(0.06,0.004,0.06)',()=>new THREE.BoxGeometry(0.06,0.004,0.06)),M.receipt,0.06,0.003,0.04));
     }
   }
-  else if(id==='pizza'){ const B=PIZZA_BOX_H; const box=mesh(roundedBox(0.34,B,0.34,0.005,1),M.box,0,0,0); g.add(box); const inner=mesh(new THREE.BoxGeometry(0.32,0.002,0.32),M.boxIn,0,B+0.0005,0); g.add(inner);
-    if(full){ const pz=new THREE.Group(); pz.position.y=B+0.0075; pz.name='pizza'; g.add(pz); const n=FOOD_BY.pizza.ammo; for(let i=0;i<n;i++){ const sl=pizzaSliceMesh(Math.PI*2/n); sl.userData.ammoUnit=true; sl.rotation.y=i*Math.PI*2/n; sl.name='slice'+i; pz.add(sl); } } else { for(let i=0;i<5;i++){ const c=mesh(new THREE.SphereGeometry(0.006,6,5),M.pizzaBase,rand(-0.1,0.1),B+0.004,rand(-0.1,0.1)); g.add(c); } } }
-  else if(id==='chicken'){ const B=CHICKEN_BOX_H; const box=mesh(roundedBox(0.24,B,0.18,0.006,1),M.box,0,0,0); g.add(box); g.add(mesh(new THREE.BoxGeometry(0.22,0.002,0.16),M.boxIn,0,B+0.0005,0));
-    if(full){ const c=chickenMesh(1); c.userData.ammoUnit=true; c.position.y=B+0.0015; c.name='chicken'; g.add(c); } else { for(const [x,z,r] of [[-0.05,0.02,0.4],[0.04,-0.03,-0.8],[0.02,0.05,1.9]]){ const b=mesh(new THREE.CylinderGeometry(0.006,0.006,0.07,6),M.bone,x,B+0.0075,z); b.rotation.set(Math.PI/2,0,r); g.add(b); const k=mesh(new THREE.SphereGeometry(0.01,6,5),M.bone,x+Math.cos(r)*0.035,B+0.0075,z-Math.sin(r)*0.035); g.add(k); } } }
+  else if(id==='pizza'){ const B=PIZZA_BOX_H; const box=mesh(FG('roundedBox(0.34,B,0.34,0.005,1)',()=>roundedBox(0.34,B,0.34,0.005,1)),M.box,0,0,0); g.add(box); const inner=mesh(FG('newTHREE.BoxGeometry(0.32,0.002,0.32)',()=>new THREE.BoxGeometry(0.32,0.002,0.32)),M.boxIn,0,B+0.0005,0); g.add(inner);
+    if(full){ const pz=new THREE.Group(); pz.position.y=B+0.0075; pz.name='pizza'; g.add(pz); const n=FOOD_BY.pizza.ammo; for(let i=0;i<n;i++){ const sl=pizzaSliceMesh(Math.PI*2/n); sl.userData.ammoUnit=true; sl.rotation.y=i*Math.PI*2/n; sl.name='slice'+i; pz.add(sl); } } else { for(let i=0;i<5;i++){ const c=mesh(FG('newTHREE.SphereGeometry(0.006,6,5)',()=>new THREE.SphereGeometry(0.006,6,5)),M.pizzaBase,rand(-0.1,0.1),B+0.004,rand(-0.1,0.1)); g.add(c); } } }
+  else if(id==='chicken'){ const B=CHICKEN_BOX_H; const box=mesh(FG('roundedBox(0.24,B,0.18,0.006,1)',()=>roundedBox(0.24,B,0.18,0.006,1)),M.box,0,0,0); g.add(box); g.add(mesh(FG('newTHREE.BoxGeometry(0.22,0.002,0.16)',()=>new THREE.BoxGeometry(0.22,0.002,0.16)),M.boxIn,0,B+0.0005,0));
+    if(full){ const c=chickenMesh(1); c.userData.ammoUnit=true; c.position.y=B+0.0015; c.name='chicken'; g.add(c); } else { for(const [x,z,r] of [[-0.05,0.02,0.4],[0.04,-0.03,-0.8],[0.02,0.05,1.9]]){ const b=mesh(FG('newTHREE.CylinderGeometry(0.006,0.006,0.07,6)',()=>new THREE.CylinderGeometry(0.006,0.006,0.07,6)),M.bone,x,B+0.0075,z); b.rotation.set(Math.PI/2,0,r); g.add(b); const k=mesh(FG('newTHREE.SphereGeometry(0.01,6,5)',()=>new THREE.SphereGeometry(0.01,6,5)),M.bone,x+Math.cos(r)*0.035,B+0.0075,z-Math.sin(r)*0.035); g.add(k); } } }
   g.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } });
   return g;
 }
@@ -3128,7 +3137,7 @@ function foodThumb(id){
   const m=buildFood(id,true); sc.add(m); const bb=new THREE.Box3().setFromObject(m); const c=bb.getCenter(new V3()); const sz=bb.getSize(new V3()); const r=Math.max(sz.x,sz.y,sz.z)*0.62;
   const cam=new THREE.PerspectiveCamera(35,1,0.01,10); cam.position.set(c.x+r*1.9,c.y+r*2.2,c.z+r*2.6); cam.lookAt(c.x,c.y-r*0.05,c.z);
   renderer.setRenderTarget(rt); renderer.setClearColor(0x000000,0); renderer.clear(); renderer.render(sc,cam); const px=new Uint8Array(192*192*4); renderer.readRenderTargetPixels(rt,0,0,192,192,px); renderer.setRenderTarget(null); renderer.setClearColor(0xF7EFDD,1);
-  const cv=mkCanvas(192,192); const g=cv.getContext('2d'); const img=g.createImageData(192,192); for(let y=0;y<192;y++){ for(let x=0;x<192*4;x++) img.data[y*192*4+x]=px[(191-y)*192*4+x]; } g.putImageData(img,0,0); rt.dispose(); sc.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); return cv.toDataURL();
+  const cv=mkCanvas(192,192); const g=cv.getContext('2d'); const img=g.createImageData(192,192); for(let y=0;y<192;y++){ for(let x=0;x<192*4;x++) img.data[y*192*4+x]=px[(191-y)*192*4+x]; } g.putImageData(img,0,0); rt.dispose(); sc.traverse(o=>{ if(o.geometry&&!o.geometry.userData.shared) o.geometry.dispose(); }); return cv.toDataURL();
 }
 
 /* =========================================================
@@ -3328,18 +3337,24 @@ function foodLandingPoint(f,x,z,fromX,fromZ){
   }
   return {x:PHONE.x,z:PHONE.z-keep};
 }
+// Picking a cluster or a line compares every candidate with every other one. In a late flood a wide-range food can have
+// two or three hundred selves in reach, so only the sixty-odd nearest the food are compared (the rest are too far to
+// be the best target anyway); the kill checks still see everyone.
+const TARGET_POOL=64;
+function nearestPool(cands,x,z,n){ if(cands.length<=n) return cands; const d=cands.map(e=>[(e.x-x)*(e.x-x)+(e.z-z)*(e.z-z),e]); d.sort((a,b)=>a[0]-b[0]); const out=new Array(n); for(let i=0;i<n;i++) out[i]=d[i][1]; return out; }
 function fireTower(t){
   const f=t.food, p=towerPos(t), cands=enemiesInRange(t.x,t.z,f.range);
   if(!cands.length) return false;
+  const pool=nearestPool(cands,t.x,t.z,TARGET_POOL);
   t.pulse=1;
   if(f.id==='kimbap'){ let tg=null,bd=1e9; for(const e of cands){ const d=headDist(e); if(d<bd){ bd=d; tg=e; } } launchStraight('kimbap',p.x,p.y+0.09,p.z,tg,2.8,f.range+0.30); SFX.kimbap(); }
   else if(f.id==='fries'){ const sorted=cands.slice().sort((a,b)=>headDist(a)-headDist(b)); for(let i=0;i<Math.min(f.volley,sorted.length);i++) launchStraight('fry',p.x,p.y+0.12,p.z,sorted[i],3.2,f.range+0.20); SFX.fries(); }
-  else if(f.id==='ramen'){ const best=bestCluster(cands,f.splash).best; launchLob('ramen',p.x,p.y+0.1,p.z,best.x,best.z,0.5,0.35); SFX.ramenFire(); }
-  else if(f.id==='cola'){ const close=cands.filter(e=>Math.hypot(e.x-t.x,e.z-t.z)<f.killR); if(close.length<(allSpawned()?1:4)){ t.pulse=0; return false; } const best=bestCluster(close,0.2).best; const dx=best.x-t.x, dz=best.z-t.z, l=Math.hypot(dx,dz)||1; colaSpray(t,dx/l,dz/l); }
-  else if(f.id==='burger'){ const line=bestLine(cands,t.x,t.z,f.roll,0.15), dir=line.dir; let near=false; for(const e of cands){ if(Math.hypot(e.x-t.x,e.z-t.z)<f.near){ near=true; break; } } if(line.n<2&&!near){ t.pulse=0; return false; } const dl=Math.hypot(dir[0],dir[1])||1; const b=burgerMesh(1); b.position.set(p.x,p.y+0.06,p.z); b.rotation.z=Math.PI/2; scene.add(b); projs.push({type:'burger',mesh:b,x:p.x,y:p.y+0.06,z:p.z,dx:dir[0]/dl,dz:dir[1]/dl,dist:0,max:f.roll,spd:1.25,roll:0,hit:new Set()}); SFX.burger(); }
-  else if(f.id==='pizza'){ const line=bestLine(cands,t.x,t.z,f.range,0.16), dir=line.dir; let near=false; for(const e of cands){ if(Math.hypot(e.x-t.x,e.z-t.z)<f.near){ near=true; break; } } if(line.n<3&&!near){ t.pulse=0; return false; } const dl=Math.hypot(dir[0],dir[1])||1; const sl=pizzaSliceMesh(); sl.position.set(p.x,p.y+0.1,p.z); scene.add(sl); projs.push({type:'pizza',mesh:sl,x:p.x,y:p.y+0.1,z:p.z,dx:dir[0]/dl,dz:dir[1]/dl,dist:0,max:f.reach,spd:2.3,spin:0,hit:new Set()});  SFX.pizza(); }
+  else if(f.id==='ramen'){ const best=bestCluster(pool,f.splash).best; launchLob('ramen',p.x,p.y+0.1,p.z,best.x,best.z,0.5,0.35); SFX.ramenFire(); }
+  else if(f.id==='cola'){ const close=cands.filter(e=>Math.hypot(e.x-t.x,e.z-t.z)<f.killR); if(close.length<(allSpawned()?1:4)){ t.pulse=0; return false; } const best=bestCluster(nearestPool(close,t.x,t.z,TARGET_POOL),0.2).best; const dx=best.x-t.x, dz=best.z-t.z, l=Math.hypot(dx,dz)||1; colaSpray(t,dx/l,dz/l); }
+  else if(f.id==='burger'){ const line=bestLine(pool,t.x,t.z,f.roll,0.15), dir=line.dir; let near=false; for(const e of cands){ if(Math.hypot(e.x-t.x,e.z-t.z)<f.near){ near=true; break; } } if(line.n<2&&!near){ t.pulse=0; return false; } const dl=Math.hypot(dir[0],dir[1])||1; const b=burgerMesh(1); b.position.set(p.x,p.y+0.06,p.z); b.rotation.z=Math.PI/2; scene.add(b); projs.push({type:'burger',mesh:b,x:p.x,y:p.y+0.06,z:p.z,dx:dir[0]/dl,dz:dir[1]/dl,dist:0,max:f.roll,spd:1.25,roll:0,hit:new Set()}); SFX.burger(); }
+  else if(f.id==='pizza'){ const line=bestLine(pool,t.x,t.z,f.range,0.16), dir=line.dir; let near=false; for(const e of cands){ if(Math.hypot(e.x-t.x,e.z-t.z)<f.near){ near=true; break; } } if(line.n<3&&!near){ t.pulse=0; return false; } const dl=Math.hypot(dir[0],dir[1])||1; const sl=pizzaSliceMesh(); sl.position.set(p.x,p.y+0.1,p.z); scene.add(sl); projs.push({type:'pizza',mesh:sl,x:p.x,y:p.y+0.1,z:p.z,dx:dir[0]/dl,dz:dir[1]/dl,dist:0,max:f.reach,spd:2.3,spin:0,hit:new Set()});  SFX.pizza(); }
   else if(f.id==='chicken'){ if(projs.some(p=>p.type==='chicken')){ t.pulse=0; return false; }
-    const cluster=bestCluster(cands,f.blast), best=cluster.best, n=cluster.n; let stuckNear=false; for(const e of cands){ if(e.state==='squat'&&Math.hypot(e.x-t.x,e.z-t.z)<0.4){ stuckNear=true; break; } }
+    const cluster=bestCluster(pool,f.blast), best=cluster.best, n=cluster.n; let stuckNear=false; for(const e of cands){ if(e.state==='squat'&&Math.hypot(e.x-t.x,e.z-t.z)<0.4){ stuckNear=true; break; } }
     let need=f.minCrowd; if(allSpawned()){ let alive=0; for(const e of EN.list) if(e.alive&&(e.state==='walk'||e.state==='squat'||e.state==='climb'||e.state==='slip'||e.state==='intro')) alive++; need=Math.min(need,Math.max(1,Math.ceil(alive*0.5))); }
     if(n<need&&!stuckNear) { t.pulse=0; return false; } const landing=foodLandingPoint(f,best.x,best.z,p.x,p.z), c=chickenMesh(1); c.position.set(p.x,p.y+0.06,p.z); scene.add(c); const cc=t.src.getObjectByName('chicken'); if(cc) cc.visible=false; projs.push({type:'chicken',mesh:c,x0:p.x,y0:p.y+0.06,z0:p.z,x1:landing.x,z1:landing.z,t:0,T:0.85,peak:0.9}); SFX.chickenFly(); }
   // What fires is eaten and stays on the body; what remains will rot in the room.
@@ -3425,7 +3440,7 @@ function bakeGroup(g){
   g.updateMatrixWorld(true); const inv=new THREE.Matrix4().copy(g.matrixWorld).invert(), buckets=new Map(), gone=[], discardedMaterials=new Set();
   g.traverse(o=>{ if(!o.isMesh||Array.isArray(o.material)||!o.visible) return; for(let p=o.parent;p&&p!==g;p=p.parent) if(!p.visible) return; const m=o.material; const key=[m.type,m.color?m.color.getHexString():'',m.roughness,m.metalness,m.map?m.map.uuid:'',m.transparent,m.opacity].join('|'); let bucket=buckets.get(key); if(!bucket){ bucket={mat:m,geos:[]}; buckets.set(key,bucket); } else if(m!==bucket.mat&&m.userData.lumpOwned) discardedMaterials.add(m); const b=bucket.geos;
     const gg=o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone(); gg.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv,o.matrixWorld)); if(!gg.attributes.normal) gg.computeVertexNormals(); if(!gg.attributes.uv) gg.setAttribute('uv',new THREE.BufferAttribute(new Float32Array(gg.attributes.position.count*2),2)); b.push(gg); gone.push(o); });
-  for(const o of gone){ o.parent.remove(o); if(o.geometry&&o.geometry!==fuzzGeo) o.geometry.dispose(); }
+  for(const o of gone){ o.parent.remove(o); if(o.geometry&&o.geometry!==fuzzGeo&&!o.geometry.userData.shared) o.geometry.dispose(); }
   for(const m of discardedMaterials) m.dispose();
   for(const {mat,geos} of buckets.values()){ let n=0; for(const x of geos) n+=x.attributes.position.count; const pos=new Float32Array(n*3), nor=new Float32Array(n*3), uv=new Float32Array(n*2); let off=0;
     for(const x of geos){ pos.set(x.attributes.position.array,off*3); nor.set(x.attributes.normal.array,off*3); uv.set(x.attributes.uv.array,off*2); off+=x.attributes.position.count; x.dispose(); }
@@ -3684,7 +3699,7 @@ function hasCleanableMess(){ return !G.propsGone||physicalWasteVolume()>0.01; }
 // Every piece on the heap is one of a few fixed shapes, so the shapes are built once and shared (they are only ever
 // baked into the merged heap or shown for a moment at night; disposing a baked copy never touches these).
 const TP_GEO=new Map();
-function tpGeo(key,make){ let g=TP_GEO.get(key); if(!g){ g=make(); TP_GEO.set(key,g); } return g; }
+function tpGeo(key,make){ let g=TP_GEO.get(key); if(!g){ g=make(); g.userData.shared=true; TP_GEO.set(key,g); } return g; }
 function tpItem(s){ const g=new THREE.Group(); g.rotation.order='YXZ'; g.position.set(s.x,s.y,s.z); g.rotation.set(s.tx,s.yaw,s.tz);
   const t=s.type;
   if(t==='kimbap'){ g.add(mesh(tpGeo('kBag',()=>roundedBox(0.2,0.022,0.16,0.035,2)),M.bag,0,0,0)); g.add(mesh(tpGeo('kGim',()=>new THREE.BoxGeometry(0.06,0.005,0.05)),M.gim,0.04,0.024,0.02)); g.add(mesh(tpGeo('kBand',()=>new THREE.BoxGeometry(0.2,0.004,0.03)),M.red,0,0.023,-0.05)); }
@@ -4316,7 +4331,7 @@ function cloneRetryVisual(root){
   const copy=root.clone(true);
   copy.traverse(o=>{
     if(!o.isMesh) return;
-    if(o.geometry) o.geometry=o.geometry.clone();
+    if(o.geometry){ o.geometry=o.geometry.clone(); o.geometry.userData.shared=false; }
     if(Array.isArray(o.material)) o.material=o.material.map(m=>m?m.clone():m);
     else if(o.material) o.material=o.material.clone();
   });
@@ -4327,7 +4342,7 @@ function disposeRetryVisual(root,disposeMaterials){
   const disposedMaterials=new Set();
   root.traverse(o=>{
     if(!o.isMesh) return;
-    if(o.geometry) o.geometry.dispose();
+    if(o.geometry&&!o.geometry.userData.shared) o.geometry.dispose();
     if(o.material){
       const mats=Array.isArray(o.material)?o.material:[o.material];
       for(const mat of mats) if(mat&&(disposeMaterials||mat.userData.lumpOwned)&&!disposedMaterials.has(mat)){ mat.dispose(); disposedMaterials.add(mat); }
@@ -5810,7 +5825,7 @@ function moveGhost(pt,id){
   showTip(lack>0?'돈이 '+won(lack)+' 모자라요':ghostWhy,ghostPlaceX,ghostPlaceZ);
   ghost.userData.model.traverse(o=>{ if(o.isMesh) o.material=ok?M.ghostOk:M.ghostNo; }); ghost.userData.ring.material.color.set(ok?0x2FD06B:0xE23744); ghost.userData.foot.material.color.set(ok?0x2FD06B:0xE23744);
 }
-function hideGhost(){ if(tipHoldT<=0) ghostTip.style.display='none'; if(ghost){ const ring=ghost.userData.ring, foot=ghost.userData.foot; scene.remove(ghost); ghost.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); if(ring&&ring.material) ring.material.dispose(); if(foot&&foot.material) foot.material.dispose(); ghost=null; ghostId=null; } }
+function hideGhost(){ if(tipHoldT<=0) ghostTip.style.display='none'; if(ghost){ const ring=ghost.userData.ring, foot=ghost.userData.foot; scene.remove(ghost); ghost.traverse(o=>{ if(o.geometry&&!o.geometry.userData.shared) o.geometry.dispose(); }); if(ring&&ring.material) ring.material.dispose(); if(foot&&foot.material) foot.material.dispose(); ghost=null; ghostId=null; } }
 const DOOR_KEEPOUT=1.0;
 
 
@@ -5979,7 +5994,7 @@ async function boot(){
     for(const m of fuzzMats) warm.add(new THREE.Mesh(fuzzGeo,m));
     warm.add(new THREE.Mesh(fuzzGeo,shroomCap),new THREE.Mesh(fuzzGeo,shroomStem));
     scene.add(warm); renderer.compile(scene,camera); scene.remove(warm);
-    const shared=new Set([...TP_GEO.values(),fuzzGeo,flyGeo,flyWingGeo]); warm.traverse(o=>{ if(o.isMesh&&o.geometry&&!shared.has(o.geometry)) o.geometry.dispose(); });
+    warm.traverse(o=>{ if(o.isMesh&&o.geometry&&!o.geometry.userData.shared&&o.geometry!==fuzzGeo&&o.geometry!==flyGeo&&o.geometry!==flyWingGeo) o.geometry.dispose(); });
   }catch(e){ try{ renderer.compile(scene,camera); }catch(e2){} }
   buildSquashSprites();
   try{ await Promise.race([Promise.all([document.fonts.load("900 20px 'Noto Sans KR'"),document.fonts.load("20px 'Black Han Sans'","자기연민디펜스")]), new Promise(r=>setTimeout(r,1500))]); }catch(e){}

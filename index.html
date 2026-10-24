@@ -738,7 +738,8 @@ sndBtn.addEventListener('click',ev=>{ ev.stopPropagation(); setMuted(!muted); })
 window.addEventListener('keydown',ev=>{ if(ev.repeat||ev.ctrlKey||ev.metaKey||ev.altKey) return; if(ev.code==='KeyM'||ev.key==='m'||ev.key==='M'||ev.key==='ㅡ') setMuted(!muted); });
 const pauseBtn=$('pauseBtn'), pauseShade=$('pauseShade'), resumeBtn=$('resumeBtn');
 function canPause(){ return G.scene==='play'||G.scene==='cut'||G.scene==='hush'; }
-function updatePauseButton(){ const on=canPause()||gamePaused; pauseBtn.classList.toggle('on',on); pauseBtn.disabled=!on; pauseBtn.setAttribute('aria-hidden',String(!on)); }
+let pauseBtnOn=null;
+function updatePauseButton(){ const on=canPause()||gamePaused; if(on===pauseBtnOn) return; pauseBtnOn=on; pauseBtn.classList.toggle('on',on); pauseBtn.disabled=!on; pauseBtn.setAttribute('aria-hidden',String(!on)); }
 function setGamePaused(on){
   on=!!on;
   if(on&&!canPause()) return;
@@ -1211,7 +1212,22 @@ try{
   catch(second){ showWebGLError(); throw second; }
 }
 canvas.addEventListener('webglcontextlost',ev=>{ ev.preventDefault(); renderLost=true; stopTransientSFX(); stopAllAnimalTalk(true); audioSleep(); showWebGLError(); },false);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+// Resolution follows the frame rate: full (up to 2× device pixels) while the frame keeps up, stepping down toward
+// 1.25× while frames average over 20 ms for a few seconds (a phone that has started to heat up and throttle), and
+// back up a notch at a time once it has run smoothly for a while.
+const DPR_MAX=Math.min(window.devicePixelRatio||1,2), DPR_MIN=Math.min(DPR_MAX,1.25), DPR_STEP=0.25;
+let dprCur=DPR_MAX;
+renderer.setPixelRatio(dprCur);
+const PERF={acc:0,n:0,bad:0,good:0,upNeed:8,wentUp:false};
+function perfFrame(ms){
+  if(ms>250) return;                         // a tab switch or a pause, not a slow frame
+  PERF.acc+=ms; PERF.n++;
+  if(PERF.n<120) return;                     // judged in roughly two-second windows
+  const avg=PERF.acc/PERF.n; PERF.acc=0; PERF.n=0;
+  if(avg>20){ PERF.good=0; if(++PERF.bad>=2&&dprCur>DPR_MIN){ PERF.bad=0; if(PERF.wentUp){ PERF.upNeed=Math.min(64,PERF.upNeed*2); PERF.wentUp=false; } setDpr(Math.max(DPR_MIN,dprCur-DPR_STEP)); } }
+  else { PERF.bad=0; if(avg<13.5&&++PERF.good>=PERF.upNeed&&dprCur<DPR_MAX){ PERF.good=0; PERF.wentUp=true; setDpr(Math.min(DPR_MAX,dprCur+DPR_STEP)); } }
+}
+function setDpr(v){ if(Math.abs(v-dprCur)<1e-3) return; dprCur=v; renderer.setPixelRatio(v); renderer.setSize(window.innerWidth,window.innerHeight,false); }
 renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 renderer.toneMapping=THREE.NoToneMapping; renderer.outputColorSpace=THREE.SRGBColorSpace;
 const scene=new THREE.Scene(); scene.background=new THREE.Color(0xF7EFDD);
@@ -1370,9 +1386,39 @@ const PPM=320; // floor canvas px per meter
 // willReadFrequently keeps these big canvases in regular memory. Chrome on phones drops the contents of
 // GPU-backed canvases while the tab is in the background, which turned the floor and walls black.
 const floorCv=mkCanvas(Math.round(RW*PPM),Math.round(RD*PPM)), fctx=floorCv.getContext('2d',{willReadFrequently:true});
-const floorTex=new THREE.CanvasTexture(floorCv); floorTex.colorSpace=THREE.SRGBColorSpace; floorTex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
+const floorTex=new THREE.CanvasTexture(floorCv); floorTex.colorSpace=THREE.SRGBColorSpace; floorTex.anisotropy=Math.min(isMobile?4:8,renderer.capabilities.getMaxAnisotropy());
 let floorDirty=false, floorDirtyT=0, floorBasePixels=null, floorMess=0;
 const fpx=x=>(x-ROOM.x0)*PPM, fpz=z=>(z-ROOM.z0)*PPM;
+// The floor canvas is 768×1760 (5.4 MB). Re-sending all of it to the GPU every 0.2 s while blood was landing — plus
+// its mipmaps — was a steady hitch on phones. Marks now flag 192 px tiles, and only those tiles are re-sent
+// (texSubImage2D); a whole-canvas repaint still goes through floorTex.needsUpdate as before.
+const FTILE=192, FTX=Math.ceil(floorCv.width/FTILE), FTZ=Math.ceil(floorCv.height/FTILE), floorTiles=new Uint8Array(FTX*FTZ), floorPatch=new Map();
+let floorTileN=0;
+function floorDirtyRect(px,py,r){
+  const x0=clamp(Math.floor((px-r)/FTILE),0,FTX-1), x1=clamp(Math.floor((px+r)/FTILE),0,FTX-1), y0=clamp(Math.floor((py-r)/FTILE),0,FTZ-1), y1=clamp(Math.floor((py+r)/FTILE),0,FTZ-1);
+  for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){ const i=y*FTX+x; if(!floorTiles[i]){ floorTiles[i]=1; floorTileN++; } }
+}
+function floorDirtyAll(){ floorTiles.fill(1); floorTileN=FTX*FTZ; }
+function floorFlush(){
+  if(!floorTileN) return;
+  const gl=renderer.getContext(), props=renderer.properties.get(floorTex);
+  // A full repaint (new day, retry, cleaners) is still waiting to be sent, or the texture has never been sent:
+  // three.js sends all of it in the coming render, marks included.
+  if(!props||!props.__webglTexture||props.__version!==floorTex.version){ if(!props||!props.__webglTexture) floorTex.needsUpdate=true; floorTiles.fill(0); floorTileN=0; return; }
+  if(floorTileN>FTX*FTZ*0.6||!renderer.capabilities.isWebGL2){ floorTex.needsUpdate=true; floorTiles.fill(0); floorTileN=0; return; }
+  const W=floorCv.width, H=floorCv.height;
+  renderer.state.bindTexture(gl.TEXTURE_2D,props.__webglTexture);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,floorTex.flipY); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,floorTex.premultiplyAlpha); gl.pixelStorei(gl.UNPACK_ALIGNMENT,floorTex.unpackAlignment); gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL,gl.NONE);
+  for(let y=0;y<FTZ;y++) for(let x=0;x<FTX;x++){ const i=y*FTX+x; if(!floorTiles[i]) continue; floorTiles[i]=0;
+    const px=x*FTILE, py=y*FTILE, w=Math.min(FTILE,W-px), h=Math.min(FTILE,H-py), key=w*10000+h;
+    let pc=floorPatch.get(key); if(!pc){ const cv=mkCanvas(w,h); pc={cv,g:cv.getContext('2d',{willReadFrequently:true})}; floorPatch.set(key,pc); }
+    pc.g.clearRect(0,0,w,h); pc.g.drawImage(floorCv,px,py,w,h,0,0,w,h);
+    gl.texSubImage2D(gl.TEXTURE_2D,0,px,floorTex.flipY?H-(py+h):py,gl.RGBA,gl.UNSIGNED_BYTE,pc.cv);
+  }
+  if(floorTex.generateMipmaps) gl.generateMipmap(gl.TEXTURE_2D);
+  renderer.state.unbindTexture();
+  floorTileN=0;
+}
 function paintFloorBase(){
   const g=fctx, W=floorCv.width, H=floorCv.height;
   g.setTransform(1,0,0,1,0,0); g.globalAlpha=1; g.globalCompositeOperation='source-over';
@@ -1407,7 +1453,7 @@ function ageFloorMarks(){
     if(r>105&&r>g*1.55&&r>b*1.45){ blend(i,92,42,31,.48); continue; }
     if(r<190&&g>r*.98&&g>b*1.4&&b<125) blend(i,76,67,43,.38);
   }
-  if(marked){ fctx.putImageData(img,0,0); floorDirtyMark(); }
+  if(marked){ fctx.putImageData(img,0,0); floorDirtyMark(); floorDirtyAll(); }
 }
 // a sneaker sole (right foot, toe up), drawn once at the floor's own scale
 let FOOTSOLE=null; const FOOTTMP=mkCanvas(Math.ceil(0.11*PPM)+4,Math.ceil(0.29*PPM)+4);
@@ -2512,7 +2558,8 @@ function removeEnemy(e){ const i=EN.list.indexOf(e); if(i<0) return; if(e.evolve
 // spatial hash
 const SH={cell:0.12,map:new Map()};
 function shKey(x,z){ return ((x/SH.cell)|0)*4096+((z/SH.cell)|0); }
-function shBuild(){ SH.map.clear(); for(const e of EN.list){ const k=shKey(e.x,e.z); let a=SH.map.get(k); if(!a){ a=[]; SH.map.set(k,a); } a.push(e); } }
+// the cell arrays are kept and emptied rather than re-created sixty times a second (less garbage to collect)
+function shBuild(){ for(const a of SH.map.values()) a.length=0; for(const e of EN.list){ const k=shKey(e.x,e.z); let a=SH.map.get(k); if(!a){ a=[]; SH.map.set(k,a); } a.push(e); } }
 function shQuery(x,z,r,fn){ const c=SH.cell, x0=((x-r)/c)|0, x1=((x+r)/c)|0, z0=((z-r)/c)|0, z1=((z+r)/c)|0; for(let ix=x0;ix<=x1;ix++) for(let iz=z0;iz<=z1;iz++){ const a=SH.map.get(ix*4096+iz); if(!a) continue; for(const e of a){ if(!e.alive) continue; const d=Math.hypot(e.x-x,e.z-z); if(d<=r) fn(e,d); } } }
 const EVOLVE={tick:0};
 function evolutionEligible(e){ return !!(e&&e.alive&&!e.dead&&e.kind==='compare'&&e.state==='walk'&&!e.evolve&&e.evolveLock<=0); }
@@ -2694,19 +2741,24 @@ function makeField(){
   const base=new Uint8Array(N), blocked=new Uint8Array(N), goal=new Uint8Array(N), dist=new Float64Array(N), dirx=new Float32Array(N), dirz=new Float32Array(N);
   const ix=x=>clamp(Math.floor((x-x0)/cell),0,nx-1), iz=z=>clamp(Math.floor((z-z0)/cell),0,nz-1);
   const cx=i=>x0+((i%nx)+0.5)*cell, cz=i=>z0+(((i/nx)|0)+0.5)*cell;
-  function refreshBase(){ for(let i=0;i<N;i++){ const x=cx(i), z=cz(i); base[i]=isStaticBlocked(x,z)?1:0; goal[i]=inHeadZone(x,z,0.06)?1:0; } }
+  // The static layout only changes when the cleaners take the props away or the head grows (a new day), so the
+  // walls/furniture pass is cached on that; it used to run on every placement and every emptied package.
+  let baseKey='';
+  function refreshBase(){ const key=(typeof PROPS_M!=='undefined'&&PROPS_M.visible?1:0)+'|'+HEADW.r.x.toFixed(4)+'|'+HEADW.r.z.toFixed(4); if(key===baseKey) return; baseKey=key;
+    for(let i=0;i<N;i++){ const x=cx(i), z=cz(i); base[i]=isStaticBlocked(x,z)?1:0; goal[i]=inHeadZone(x,z,0.06)?1:0; } }
   refreshBase();
   const heap=[];
   function hpush(d,i){ heap.push(d,i); let k=heap.length/2-1; while(k>0){ const p=(k-1)>>1; if(heap[p*2]<=heap[k*2]) break; const td=heap[p*2],ti=heap[p*2+1]; heap[p*2]=heap[k*2]; heap[p*2+1]=heap[k*2+1]; heap[k*2]=td; heap[k*2+1]=ti; k=p; } }
-  function hpop(){ const d=heap[0], i=heap[1]; const ld=heap.pop(), li=heap.pop(); if(heap.length){ heap[0]=li; heap[1]=ld; let k=0; const n=heap.length/2; for(;;){ let l=2*k+1,r=l+1,m=k; if(l<n&&heap[l*2]<heap[m*2]) m=l; if(r<n&&heap[r*2]<heap[m*2]) m=r; if(m===k) break; const td=heap[m*2],ti=heap[m*2+1]; heap[m*2]=heap[k*2]; heap[m*2+1]=heap[k*2+1]; heap[k*2]=td; heap[k*2+1]=ti; k=m; } } return [d,i]; }
-  const NB=[[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,1.414],[1,-1,1.414],[-1,1,1.414],[-1,-1,1.414]];
+  let hd=0, hi=0;
+  function hpop(){ hd=heap[0]; hi=heap[1]; const ld=heap.pop(), li=heap.pop(); if(heap.length){ heap[0]=li; heap[1]=ld; let k=0; const n=heap.length/2; for(;;){ let l=2*k+1,r=l+1,m=k; if(l<n&&heap[l*2]<heap[m*2]) m=l; if(r<n&&heap[r*2]<heap[m*2]) m=r; if(m===k) break; const td=heap[m*2],ti=heap[m*2+1]; heap[m*2]=heap[k*2]; heap[m*2+1]=heap[k*2+1]; heap[k*2]=td; heap[k*2+1]=ti; k=m; } } }
+  const NBX=[1,-1,0,0,1,1,-1,-1], NBZ=[0,0,1,-1,1,-1,1,-1], NBC=[1,1,1,1,1.414,1.414,1.414,1.414];
   function compute(){
     dist.fill(1e9); heap.length=0;
     for(let i=0;i<N;i++) if(goal[i]&&!blocked[i]){ dist[i]=0; hpush(0,i); }
-    while(heap.length){ const [d,i]=hpop(); if(d>dist[i]) continue; const x=i%nx, z=(i/nx)|0;
-      for(const [dx,dz,c] of NB){ const nx2=x+dx, nz2=z+dz; if(nx2<0||nx2>=nx||nz2<0||nz2>=nz) continue; const j=nz2*nx+nx2; if(blocked[j]) continue; if(dx&&dz){ if(blocked[z*nx+nx2]||blocked[nz2*nx+x]) continue; } const nd=d+c; if(nd<dist[j]){ dist[j]=nd; hpush(nd,j); } } }
+    while(heap.length){ hpop(); const d=hd, i=hi; if(d>dist[i]) continue; const x=i%nx, z=(i/nx)|0;
+      for(let k=0;k<8;k++){ const dx=NBX[k], dz=NBZ[k], nx2=x+dx, nz2=z+dz; if(nx2<0||nx2>=nx||nz2<0||nz2>=nz) continue; const j=nz2*nx+nx2; if(blocked[j]) continue; if(dx&&dz){ if(blocked[z*nx+nx2]||blocked[nz2*nx+x]) continue; } const nd=d+NBC[k]; if(nd<dist[j]){ dist[j]=nd; hpush(nd,j); } } }
     for(let i=0;i<N;i++){ const x=i%nx, z=(i/nx)|0; let bd=dist[i], bx=0, bz=0;
-      for(const [dx,dz] of NB){ const nx2=x+dx, nz2=z+dz; if(nx2<0||nx2>=nx||nz2<0||nz2>=nz) continue; const j=nz2*nx+nx2; if(dist[j]<bd){ bd=dist[j]; bx=dx; bz=dz; } }
+      for(let k=0;k<8;k++){ const dx=NBX[k], dz=NBZ[k], nx2=x+dx, nz2=z+dz; if(nx2<0||nx2>=nx||nz2<0||nz2>=nz) continue; const j=nz2*nx+nx2; if(dist[j]<bd){ bd=dist[j]; bx=dx; bz=dz; } }
       if(bd>=1e9||(bx===0&&bz===0)){ if(goal[i]){ dirx[i]=0; dirz[i]=0; } else { const vx=-cx(i), vz=-cz(i); const l=Math.hypot(vx,vz)||1; dirx[i]=vx/l; dirz[i]=vz/l; } }
       else { const l=Math.hypot(bx,bz); dirx[i]=bx/l; dirz[i]=bz/l; } }
   }
@@ -2732,8 +2784,8 @@ const FF=makeField(), FS=makeField(); FS.rebuild([]);
    ========================================================= */
 const DEC={
   splat(x,z,r,col){ const g=fctx, px=fpx(x), py=fpz(z), R=r*PPM; g.fillStyle=col; ell(g,px,py,R*rand(0.85,1.15),R*rand(0.7,0.95),rand(0,3)); g.fill();
-    const n=irand(6,11); for(let i=0;i<n;i++){ const a=rand(0,6.28), d=R*rand(0.8,2.1), s=R*rand(0.14,0.34); ell(g,px+Math.cos(a)*d,py+Math.sin(a)*d*0.85,s,s*0.8); g.fill(); if(Math.random()<0.5){ g.lineWidth=s*0.8; g.strokeStyle=col; g.beginPath(); g.moveTo(px+Math.cos(a)*R*0.5,py+Math.sin(a)*R*0.4); g.lineTo(px+Math.cos(a)*d,py+Math.sin(a)*d*0.85); g.stroke(); } } floorDirtyMark(); },
-  drop(x,z,s,col){ const g=fctx; g.fillStyle=col; ell(g,fpx(x),fpz(z),s*PPM,s*PPM*0.75,rand(0,3)); g.fill(); floorDirtyMark(); },
+    const n=irand(6,11); for(let i=0;i<n;i++){ const a=rand(0,6.28), d=R*rand(0.8,2.1), s=R*rand(0.14,0.34); ell(g,px+Math.cos(a)*d,py+Math.sin(a)*d*0.85,s,s*0.8); g.fill(); if(Math.random()<0.5){ g.lineWidth=s*0.8; g.strokeStyle=col; g.beginPath(); g.moveTo(px+Math.cos(a)*R*0.5,py+Math.sin(a)*R*0.4); g.lineTo(px+Math.cos(a)*d,py+Math.sin(a)*d*0.85); g.stroke(); } } floorDirtyMark(); floorDirtyRect(px,py,R*2.6); },
+  drop(x,z,s,col){ const g=fctx; g.fillStyle=col; ell(g,fpx(x),fpz(z),s*PPM,s*PPM*0.75,rand(0,3)); g.fill(); floorDirtyMark(); floorDirtyRect(fpx(x),fpz(z),s*PPM*1.3+2); },
   // A crushed one: the same little figure pressed flat on its back (see SQ), lying in the blood squeezed
   // out from under it. (dx,dz): which way it was run over, so the blood streaks run that way.
   pancake(x,z,dx,dz,fat,kind){
@@ -2752,19 +2804,19 @@ const DEC={
       g.drawImage(spr.pool,-S/2,-S/2,S,S); g.drawImage(spr.img,-S/2,-S/2,S,S);
       // pressed hard in the middle: blood soaked through the shirt
       g.globalAlpha=0.5; for(let i=0;i<irand(1,2);i++){ const x=rand(-0.015,0.015)*PPM, y=rand(0,0.025)*PPM; g.fillStyle=pick(BLOOD); ell(g,x,y,rand(0.005,0.009)*PPM,rand(0.003,0.006)*PPM,rand(0,3)); g.fill(); ell(g,x+rand(-2,2),y+rand(-2,2),rand(0.003,0.006)*PPM,rand(0.004,0.007)*PPM,rand(0,3)); g.fill(); } g.globalAlpha=1; }
-    g.restore(); floorDirtyMark(); },
-  soup(x,z){ const g=fctx, px=fpx(x), py=fpz(z); g.globalAlpha=0.7; g.fillStyle='#E88A2A'; ell(g,px,py,0.19*PPM*rand(0.9,1.1),0.15*PPM*rand(0.9,1.1),rand(0,3)); g.fill(); for(let i=0;i<7;i++){ const a=rand(0,6.28),d=rand(0.12,0.26)*PPM; ell(g,px+Math.cos(a)*d,py+Math.sin(a)*d*0.8,rand(4,10),rand(3,7)); g.fill(); } g.globalAlpha=1; g.strokeStyle='#F7D27A'; g.lineWidth=3; for(let i=0;i<8;i++){ const ax=px+rand(-40,40), ay=py+rand(-30,30); g.beginPath(); g.moveTo(ax,ay); g.bezierCurveTo(ax+10,ay-10,ax+18,ay+10,ax+30,ay+rand(-6,6)); g.stroke(); } floorDirtyMark(); },
-  colaStain(x,z,dx,dz){ const g=fctx; g.save(); g.translate(fpx(x),fpz(z)); g.rotate(Math.atan2(dz,dx)); g.scale(PPM,PPM); g.globalAlpha=0.45; g.fillStyle='#5A2A12'; g.beginPath(); g.moveTo(0,0); g.lineTo(0.75,-0.28); g.quadraticCurveTo(0.9,0,0.75,0.28); g.closePath(); g.fill(); g.globalAlpha=0.35; g.fillStyle='#F2E8D8'; for(let i=0;i<14;i++){ const d=rand(0.2,0.85), a=rand(-0.32,0.32); ell(g,Math.cos(a)*d,Math.sin(a)*d,rand(0.01,0.03),rand(0.008,0.02)); g.fill(); } g.restore(); floorDirtyMark(); },
-  grease(x,z,r){ const g=fctx; g.globalAlpha=0.35; g.fillStyle='#B8791E'; ell(g,fpx(x),fpz(z),r*PPM,r*PPM*0.85,rand(0,3)); g.fill(); g.globalAlpha=1; for(let i=0;i<6;i++){ const a=rand(0,6.28),d=rand(0.2,0.5)*r*PPM; g.fillStyle='#FFF4DE'; ell(g,fpx(x)+Math.cos(a)*d,fpz(z)+Math.sin(a)*d,7,3,a); g.fill(); } floorDirtyMark(); },
-  mold(x,z,r){ const g=fctx, px=fpx(x), py=fpz(z), R=r*PPM; g.globalAlpha=0.55; g.fillStyle='#6F7A3A'; ell(g,px,py,R*rand(1.0,1.2),R*rand(0.8,1.0),rand(0,3)); g.fill(); g.globalAlpha=0.7; for(let i=0;i<9;i++){ const a=rand(0,6.28), d=R*rand(0.2,1.1); g.fillStyle=pick(['#9DB24E','#E8EDD2','#4E5A26']); ell(g,px+Math.cos(a)*d,py+Math.sin(a)*d*0.85,R*rand(0.1,0.22),R*rand(0.08,0.18)); g.fill(); } g.globalAlpha=1; floorDirtyMark(); },
+    g.restore(); floorDirtyMark(); floorDirtyRect(px,py,0.34*PPM); },
+  soup(x,z){ const g=fctx, px=fpx(x), py=fpz(z); g.globalAlpha=0.7; g.fillStyle='#E88A2A'; ell(g,px,py,0.19*PPM*rand(0.9,1.1),0.15*PPM*rand(0.9,1.1),rand(0,3)); g.fill(); for(let i=0;i<7;i++){ const a=rand(0,6.28),d=rand(0.12,0.26)*PPM; ell(g,px+Math.cos(a)*d,py+Math.sin(a)*d*0.8,rand(4,10),rand(3,7)); g.fill(); } g.globalAlpha=1; g.strokeStyle='#F7D27A'; g.lineWidth=3; for(let i=0;i<8;i++){ const ax=px+rand(-40,40), ay=py+rand(-30,30); g.beginPath(); g.moveTo(ax,ay); g.bezierCurveTo(ax+10,ay-10,ax+18,ay+10,ax+30,ay+rand(-6,6)); g.stroke(); } floorDirtyMark(); floorDirtyRect(px,py,0.32*PPM); },
+  colaStain(x,z,dx,dz){ const g=fctx; g.save(); g.translate(fpx(x),fpz(z)); g.rotate(Math.atan2(dz,dx)); g.scale(PPM,PPM); g.globalAlpha=0.45; g.fillStyle='#5A2A12'; g.beginPath(); g.moveTo(0,0); g.lineTo(0.75,-0.28); g.quadraticCurveTo(0.9,0,0.75,0.28); g.closePath(); g.fill(); g.globalAlpha=0.35; g.fillStyle='#F2E8D8'; for(let i=0;i<14;i++){ const d=rand(0.2,0.85), a=rand(-0.32,0.32); ell(g,Math.cos(a)*d,Math.sin(a)*d,rand(0.01,0.03),rand(0.008,0.02)); g.fill(); } g.restore(); floorDirtyMark(); floorDirtyRect(fpx(x),fpz(z),0.92*PPM); },
+  grease(x,z,r){ const g=fctx; g.globalAlpha=0.35; g.fillStyle='#B8791E'; ell(g,fpx(x),fpz(z),r*PPM,r*PPM*0.85,rand(0,3)); g.fill(); g.globalAlpha=1; for(let i=0;i<6;i++){ const a=rand(0,6.28),d=rand(0.2,0.5)*r*PPM; g.fillStyle='#FFF4DE'; ell(g,fpx(x)+Math.cos(a)*d,fpz(z)+Math.sin(a)*d,7,3,a); g.fill(); } floorDirtyMark(); floorDirtyRect(fpx(x),fpz(z),r*PPM*1.05+8); },
+  mold(x,z,r){ const g=fctx, px=fpx(x), py=fpz(z), R=r*PPM; g.globalAlpha=0.55; g.fillStyle='#6F7A3A'; ell(g,px,py,R*rand(1.0,1.2),R*rand(0.8,1.0),rand(0,3)); g.fill(); g.globalAlpha=0.7; for(let i=0;i<9;i++){ const a=rand(0,6.28), d=R*rand(0.2,1.1); g.fillStyle=pick(['#9DB24E','#E8EDD2','#4E5A26']); ell(g,px+Math.cos(a)*d,py+Math.sin(a)*d*0.85,R*rand(0.1,0.22),R*rand(0.08,0.18)); g.fill(); } g.globalAlpha=1; floorDirtyMark(); floorDirtyRect(px,py,R*1.4); },
   // What remains after the raised, fly-covered lump finally collapses: flat, dry and visibly inactive.
   moldStain(x,z,r){ const g=fctx, px=fpx(x), py=fpz(z), R=r*PPM; g.save(); g.translate(px,py); g.rotate(rand(0,3));
     g.globalAlpha=.52; g.fillStyle='#514832'; ell(g,0,0,R*rand(1.05,1.25),R*rand(.62,.82),0); g.fill();
     g.globalAlpha=.68; for(let i=0;i<11;i++){ const a=rand(0,6.28), d=R*rand(.18,1.05), s=R*rand(.055,.15); g.fillStyle=pick(['#3D3828','#6B5E39','#493F2D']); ell(g,Math.cos(a)*d,Math.sin(a)*d*.68,s,s*rand(.45,.75),a); g.fill(); }
-    g.restore(); g.globalAlpha=1; floorDirtyMark(); },
+    g.restore(); g.globalAlpha=1; floorDirtyMark(); floorDirtyRect(px,py,R*1.35); },
   // a thrown burger or chicken two nights on: a dry brown ring with a few dark crusts (not mold green)
-  rot(x,z,r){ const g=fctx, px=fpx(x), py=fpz(z), R=r*PPM; g.globalAlpha=0.4; g.fillStyle='#6B5238'; ell(g,px,py,R*rand(1.0,1.15),R*rand(0.75,0.95),rand(0,3)); g.fill(); g.globalAlpha=0.5; g.fillStyle='#4A3826'; ell(g,px+rand(-0.2,0.2)*R,py+rand(-0.2,0.2)*R,R*rand(0.5,0.7),R*rand(0.4,0.55),rand(0,3)); g.fill(); g.globalAlpha=0.75; for(let i=0;i<7;i++){ const a=rand(0,6.28), d=R*rand(0.1,1.0); g.fillStyle=pick(['#3B2B1C','#7A5E3E','#2E2216']); ell(g,px+Math.cos(a)*d,py+Math.sin(a)*d*0.85,R*rand(0.06,0.14),R*rand(0.05,0.11),rand(0,3)); g.fill(); } g.globalAlpha=1; floorDirtyMark(); },
-  confetti(x,z,col){ const g=fctx; g.save(); g.translate(fpx(x),fpz(z)); g.rotate(rand(0,3)); g.fillStyle=col; g.fillRect(-3,-2,6,4); g.restore(); floorDirtyMark(); },
+  rot(x,z,r){ const g=fctx, px=fpx(x), py=fpz(z), R=r*PPM; g.globalAlpha=0.4; g.fillStyle='#6B5238'; ell(g,px,py,R*rand(1.0,1.15),R*rand(0.75,0.95),rand(0,3)); g.fill(); g.globalAlpha=0.5; g.fillStyle='#4A3826'; ell(g,px+rand(-0.2,0.2)*R,py+rand(-0.2,0.2)*R,R*rand(0.5,0.7),R*rand(0.4,0.55),rand(0,3)); g.fill(); g.globalAlpha=0.75; for(let i=0;i<7;i++){ const a=rand(0,6.28), d=R*rand(0.1,1.0); g.fillStyle=pick(['#3B2B1C','#7A5E3E','#2E2216']); ell(g,px+Math.cos(a)*d,py+Math.sin(a)*d*0.85,R*rand(0.06,0.14),R*rand(0.05,0.11),rand(0,3)); g.fill(); } g.globalAlpha=1; floorDirtyMark(); floorDirtyRect(px,py,R*1.3); },
+  confetti(x,z,col){ const g=fctx; g.save(); g.translate(fpx(x),fpz(z)); g.rotate(rand(0,3)); g.fillStyle=col; g.fillRect(-3,-2,6,4); g.restore(); floorDirtyMark(); floorDirtyRect(fpx(x),fpz(z),8); },
   // a sneaker print in blood; side>0 is the right leg (mirrored sole), ink 0…1 how much is still on the sole
   footprint(x,z,yaw,side,ink){ if(z<ROOM.z0+0.05||x<ROOM.x0+0.04||x>ROOM.x1-0.04||ink<0.03) return; const S=footSole(), c=FOOTTMP, t=c.getContext('2d');
     t.setTransform(1,0,0,1,0,0); t.globalCompositeOperation='source-over'; t.globalAlpha=1; t.clearRect(0,0,c.width,c.height); t.drawImage(S,0,0);
@@ -2772,10 +2824,10 @@ const DEC={
     // not all of the sole takes: gaps, more of them as the blood runs out
     t.globalCompositeOperation='destination-out'; const n=Math.round(30+110*(1-ink)); for(let i=0;i<n;i++){ t.globalAlpha=rand(0.35,1); t.beginPath(); t.arc(rand(0,c.width),rand(0,c.height),rand(0.7,2.4),0,Math.PI*2); t.fill(); }
     t.globalAlpha=1; t.globalCompositeOperation='source-over';
-    const g=fctx; g.save(); g.translate(fpx(x),fpz(z)); g.rotate(Math.PI-yaw+rand(-0.07,0.07)); if(side>0) g.scale(-1,1); g.globalAlpha=clamp(0.2+0.62*ink,0,0.82); g.drawImage(c,-c.width/2,-c.height/2); g.restore(); g.globalAlpha=1; floorDirtyMark(); },
-  wetStep(x,z){ if(z<ROOM.z0) return; const g=fctx; g.globalAlpha=0.35; g.fillStyle='#8FB8DB'; ell(g,fpx(x)+rand(-3,3),fpz(z)+rand(-3,3),rand(3,5),rand(4,7),rand(0,3)); g.fill(); g.globalAlpha=1; floorDirtyMark(); },
-  crumbs(x,z,col){ const g=fctx; g.fillStyle=col||'#E9C46A'; for(let i=0;i<6;i++){ ell(g,fpx(x)+rand(-14,14),fpz(z)+rand(-10,10),rand(2,4),rand(1.5,3)); g.fill(); } floorDirtyMark(); },
-  pizzaMark(x,z){ const g=fctx; g.globalAlpha=0.5; g.fillStyle='#D9481F'; ell(g,fpx(x),fpz(z),12,9,rand(0,3)); g.fill(); g.globalAlpha=1; g.fillStyle='#F3D06F'; for(let i=0;i<4;i++){ ell(g,fpx(x)+rand(-16,16),fpz(z)+rand(-12,12),3,2); g.fill(); } floorDirtyMark(); },
+    const g=fctx; g.save(); g.translate(fpx(x),fpz(z)); g.rotate(Math.PI-yaw+rand(-0.07,0.07)); if(side>0) g.scale(-1,1); g.globalAlpha=clamp(0.2+0.62*ink,0,0.82); g.drawImage(c,-c.width/2,-c.height/2); g.restore(); g.globalAlpha=1; floorDirtyMark(); floorDirtyRect(fpx(x),fpz(z),Math.hypot(c.width,c.height)*0.5+3); },
+  wetStep(x,z){ if(z<ROOM.z0) return; const g=fctx; g.globalAlpha=0.35; g.fillStyle='#8FB8DB'; ell(g,fpx(x)+rand(-3,3),fpz(z)+rand(-3,3),rand(3,5),rand(4,7),rand(0,3)); g.fill(); g.globalAlpha=1; floorDirtyMark(); floorDirtyRect(fpx(x),fpz(z),12); },
+  crumbs(x,z,col){ const g=fctx; g.fillStyle=col||'#E9C46A'; for(let i=0;i<6;i++){ ell(g,fpx(x)+rand(-14,14),fpz(z)+rand(-10,10),rand(2,4),rand(1.5,3)); g.fill(); } floorDirtyMark(); floorDirtyRect(fpx(x),fpz(z),20); },
+  pizzaMark(x,z){ const g=fctx; g.globalAlpha=0.5; g.fillStyle='#D9481F'; ell(g,fpx(x),fpz(z),12,9,rand(0,3)); g.fill(); g.globalAlpha=1; g.fillStyle='#F3D06F'; for(let i=0;i<4;i++){ ell(g,fpx(x)+rand(-16,16),fpz(z)+rand(-12,12),3,2); g.fill(); } floorDirtyMark(); floorDirtyRect(fpx(x),fpz(z),24); },
 };
 const BLOOD=['#D8142A','#C21027','#E01E36','#B10D24'];
 
@@ -3128,18 +3180,22 @@ function makeTower(foodId,x,z,ammo,baseY){
     badgeY:food.h+0.03
   };
 
-  t.full=buildFood(foodId,true);
+  // t.src is the food as modelled (a box, eight fries, four cup-ramen noodles...) and never enters the scene. What is
+  // drawn is t.full: the same shapes baked into one mesh per material (fries: 3 instead of 11, kimbap: 4 instead of 33),
+  // re-baked only when the stock changes. Thirty fries on the floor were ~330 extra draws a frame before this.
+  t.src=buildFood(foodId,true);
+  t.full=new THREE.Group();
   t.full.rotation.y=t.yaw;
 
   const p=towerPos(t);
   t.full.position.copy(p);
   towerG.add(t.full);
-
-  const bb=new THREE.Box3().setFromObject(t.full);
-  t.badgeY=Math.max(t.badgeY,bb.max.y-p.y+0.025);
-
   t.full.userData.tower=t;
   setTowerState(t);
+
+  const bb=new THREE.Box3().setFromObject(t.full);
+  if(Number.isFinite(bb.max.y)) t.badgeY=Math.max(t.badgeY,bb.max.y-p.y+0.025);
+
   towers.push(t);
   return t;
 }
@@ -3152,7 +3208,7 @@ function setTowerState(t){
   t.full.visible=!e;
   t.blocks=!e;
 
-  t.full.traverse(o=>{
+  t.src.traverse(o=>{
     if(o.userData&&o.userData.ammoUnit) units.push(o);
   });
 
@@ -3161,23 +3217,63 @@ function setTowerState(t){
     o.visible=i<shown;
   });
 
-  const soup=t.full.getObjectByName('ramenFill');
+  const soup=t.src.getObjectByName('ramenFill');
   if(soup){
     soup.visible=!e;
     soup.position.y=lerp(0.055,0.092,ratio);
   }
 
-  const cola=t.full.getObjectByName('colaFill');
+  const cola=t.src.getObjectByName('colaFill');
   if(cola){
     cola.visible=!e;
     cola.scale.y=Math.max(0.001,ratio);
     cola.position.y=0.216*ratio*0.5;
   }
+  rebakeTower(t);
+}
+
+// Merge the visible meshes under `src` into one mesh per material (non-destructive; `src` is left as it is).
+// Geometry is taken in src's own space, so the result sits wherever the receiving group is placed.
+const bakeInv=new THREE.Matrix4(), bakeRel=new THREE.Matrix4();
+function bakeMeshesOf(src){
+  src.updateMatrixWorld(true);
+  bakeInv.copy(src.matrixWorld).invert(); const buckets=new Map();
+  src.traverse(o=>{
+    if(!o.isMesh||Array.isArray(o.material)||!o.visible) return;
+    for(let p=o.parent;p&&p!==src;p=p.parent) if(!p.visible) return;
+    let b=buckets.get(o.material); if(!b){ b={mat:o.material,parts:[],n:0}; buckets.set(o.material,b); }
+    // each piece keeps its transformed vertex arrays; they are only rebuilt when the piece has moved (soup level,
+    // cola level), so re-baking after a shot is a few array copies
+    bakeRel.multiplyMatrices(bakeInv,o.matrixWorld);
+    let c=o.userData.bake;
+    if(!c||!c.m.equals(bakeRel)){
+      const g=o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone();
+      g.applyMatrix4(bakeRel);
+      if(!g.attributes.normal) g.computeVertexNormals();
+      const n=g.attributes.position.count;
+      c=o.userData.bake={m:bakeRel.clone(),n,pos:g.attributes.position.array,nor:g.attributes.normal.array,uv:g.attributes.uv?g.attributes.uv.array:new Float32Array(n*2)};
+    }
+    b.parts.push(c); b.n+=c.n;
+  });
+  const out=[];
+  for(const b of buckets.values()){
+    const pos=new Float32Array(b.n*3), nor=new Float32Array(b.n*3), uv=new Float32Array(b.n*2); let off=0;
+    for(const c of b.parts){ pos.set(c.pos,off*3); nor.set(c.nor,off*3); uv.set(c.uv,off*2); off+=c.n; }
+    const mg=new THREE.BufferGeometry(); mg.setAttribute('position',new THREE.BufferAttribute(pos,3)); mg.setAttribute('normal',new THREE.BufferAttribute(nor,3)); mg.setAttribute('uv',new THREE.BufferAttribute(uv,2)); mg.computeBoundingSphere();
+    const mm=new THREE.Mesh(mg,b.mat); mm.castShadow=true; mm.receiveShadow=true; out.push(mm);
+  }
+  return out;
+}
+function rebakeTower(t){
+  for(const c of t.full.children.slice()){ t.full.remove(c); if(c.geometry) c.geometry.dispose(); }
+  if(t.ammo<=0) return;
+  for(const m of bakeMeshesOf(t.src)) t.full.add(m);
 }
 
 function removeTower(t){
   towerG.remove(t.full);
   disposeRetryVisual(t.full,false);
+  if(t.src){ disposeRetryVisual(t.src,false); t.src=null; }
   towers=towers.filter(x=>x!==t);
 
   if(t.badge){
@@ -3245,7 +3341,7 @@ function fireTower(t){
   else if(f.id==='chicken'){ if(projs.some(p=>p.type==='chicken')){ t.pulse=0; return false; }
     const cluster=bestCluster(cands,f.blast), best=cluster.best, n=cluster.n; let stuckNear=false; for(const e of cands){ if(e.state==='squat'&&Math.hypot(e.x-t.x,e.z-t.z)<0.4){ stuckNear=true; break; } }
     let need=f.minCrowd; if(allSpawned()){ let alive=0; for(const e of EN.list) if(e.alive&&(e.state==='walk'||e.state==='squat'||e.state==='climb'||e.state==='slip'||e.state==='intro')) alive++; need=Math.min(need,Math.max(1,Math.ceil(alive*0.5))); }
-    if(n<need&&!stuckNear) { t.pulse=0; return false; } const landing=foodLandingPoint(f,best.x,best.z,p.x,p.z), c=chickenMesh(1); c.position.set(p.x,p.y+0.06,p.z); scene.add(c); const cc=t.full.getObjectByName('chicken'); if(cc) cc.visible=false; projs.push({type:'chicken',mesh:c,x0:p.x,y0:p.y+0.06,z0:p.z,x1:landing.x,z1:landing.z,t:0,T:0.85,peak:0.9}); SFX.chickenFly(); }
+    if(n<need&&!stuckNear) { t.pulse=0; return false; } const landing=foodLandingPoint(f,best.x,best.z,p.x,p.z), c=chickenMesh(1); c.position.set(p.x,p.y+0.06,p.z); scene.add(c); const cc=t.src.getObjectByName('chicken'); if(cc) cc.visible=false; projs.push({type:'chicken',mesh:c,x0:p.x,y0:p.y+0.06,z0:p.z,x1:landing.x,z1:landing.z,t:0,T:0.85,peak:0.9}); SFX.chickenFly(); }
   // What fires is eaten and stays on the body; what remains will rot in the room.
   G.eaten+=(f.fatShot||0)*CFG.WEIGHT_GAIN_MULT;
   t.ammo--;
@@ -3480,7 +3576,7 @@ function trashNightEnd(){ if(!NIGHT){ trashNightStart(); trashNightStep(1); } co
   for(const m of trash) m.userData.age++;
   for(const m of trash) cacheTrashSupport(m);
   G.trashV=N.V1; if(N.fresh){ scene.remove(N.fresh); disposeRetryVisual(N.fresh,false); }
-  buildTrashPile(); }
+  buildTrashPile(true); }
 // what the crew leaves: his things, a clean floor (stains, blood, footprints, mould all scrubbed off), nothing else
 function cleanRoomNow(){
   clearAttacks();
@@ -3585,19 +3681,28 @@ function cleanQuote(){
 }
 function hasCleanableMess(){ return !G.propsGone||physicalWasteVolume()>0.01; }
 // one emptied package as it lies on the heap
+// Every piece on the heap is one of a few fixed shapes, so the shapes are built once and shared (they are only ever
+// baked into the merged heap or shown for a moment at night; disposing a baked copy never touches these).
+const TP_GEO=new Map();
+function tpGeo(key,make){ let g=TP_GEO.get(key); if(!g){ g=make(); TP_GEO.set(key,g); } return g; }
 function tpItem(s){ const g=new THREE.Group(); g.rotation.order='YXZ'; g.position.set(s.x,s.y,s.z); g.rotation.set(s.tx,s.yaw,s.tz);
   const t=s.type;
-  if(t==='kimbap'){ g.add(mesh(roundedBox(0.2,0.022,0.16,0.035,2),M.bag,0,0,0)); g.add(mesh(new THREE.BoxGeometry(0.06,0.005,0.05),M.gim,0.04,0.024,0.02)); g.add(mesh(new THREE.BoxGeometry(0.2,0.004,0.03),M.red,0,0.023,-0.05)); }
-  else if(t==='fries'){ g.add(mesh(new THREE.BoxGeometry(0.09,0.032,0.056),M.red,0,0.016,0)); g.add(mesh(new THREE.BoxGeometry(0.028,0.012,0.002),M.yellow,0,0.02,0.029)); const f=fryMesh(); f.rotation.z=Math.PI/2; f.position.set(0.035,0.036,0.01); g.add(f); }
-  else if(t==='ramen'){ const cup=mesh(new THREE.CylinderGeometry(0.048,0.037,0.095,16),M.ramenCup,0,0.048,0); cup.rotation.z=Math.PI/2; g.add(cup); const band=mesh(new THREE.CylinderGeometry(0.0492,0.0452,0.032,16),M.red,0.012,0.048,0); band.rotation.z=Math.PI/2; g.add(band); }
-  else if(t==='cola'){ const b=mesh(new THREE.CylinderGeometry(0.045,0.043,0.2,14),M.colaBottle,0,0.045,0); b.rotation.z=Math.PI/2; g.add(b); const l=mesh(new THREE.CylinderGeometry(0.0458,0.0458,0.065,14),M.colaLabel,0,0.045,0); l.rotation.z=Math.PI/2; g.add(l);
-    const n=mesh(new THREE.CylinderGeometry(0.017,0.045,0.045,12),M.colaBottle,-0.1225,0.045,0); n.rotation.z=Math.PI/2; g.add(n); const c=mesh(new THREE.CylinderGeometry(0.018,0.018,0.022,10),M.colaCap,-0.156,0.045,0); c.rotation.z=Math.PI/2; g.add(c); }
-  else if(t==='burger'){ g.add(mesh(roundedBox(0.19,0.046,0.14,0.02,2),M.paperBag,0,0,0)); g.add(mesh(new THREE.BoxGeometry(0.06,0.004,0.07),M.receipt,0.05,0.048,0.02)); }
-  else if(t==='pizza'){ const B=PIZZA_BOX_H; g.add(mesh(roundedBox(0.34,B,0.34,0.005,1),M.box,0,0,0)); const top=new THREE.Mesh(new THREE.PlaneGeometry(0.33,0.33),TP_MAT.pizzaTop||M.box); top.rotation.x=-Math.PI/2; top.position.y=B+0.0005; top.castShadow=false; top.receiveShadow=true; g.add(top); }
-  else if(t==='chicken'){ const B=CHICKEN_BOX_H; g.add(mesh(roundedBox(0.24,B,0.18,0.006,1),M.box,0,0,0)); g.add(mesh(new THREE.BoxGeometry(0.075,0.002,0.182),M.red,0.03,B+0.0005,0)); g.add(mesh(new THREE.BoxGeometry(0.05,0.002,0.04),M.white,-0.065,B+0.0008,0.04)); }
-  else { g.add(mesh(new THREE.CylinderGeometry(0.095,0.075,0.05,18),TP_MAT.bowl||M.black,0,0.025,0)); if(TP_MAT.lid) g.add(mesh(new THREE.CylinderGeometry(0.098,0.098,0.01,18),TP_MAT.lid,0.01,0.055,0.006)); }
+  if(t==='kimbap'){ g.add(mesh(tpGeo('kBag',()=>roundedBox(0.2,0.022,0.16,0.035,2)),M.bag,0,0,0)); g.add(mesh(tpGeo('kGim',()=>new THREE.BoxGeometry(0.06,0.005,0.05)),M.gim,0.04,0.024,0.02)); g.add(mesh(tpGeo('kBand',()=>new THREE.BoxGeometry(0.2,0.004,0.03)),M.red,0,0.023,-0.05)); }
+  else if(t==='fries'){ g.add(mesh(tpGeo('fBox',()=>new THREE.BoxGeometry(0.09,0.032,0.056)),M.red,0,0.016,0)); g.add(mesh(tpGeo('fTag',()=>new THREE.BoxGeometry(0.028,0.012,0.002)),M.yellow,0,0.02,0.029)); const f=mesh(tpGeo('fry',()=>new THREE.BoxGeometry(0.009,0.075,0.009)),M.fry,0,0,0); f.rotation.z=Math.PI/2; f.position.set(0.035,0.036,0.01); g.add(f); }
+  else if(t==='ramen'){ const cup=mesh(tpGeo('rCup',()=>new THREE.CylinderGeometry(0.048,0.037,0.095,16)),M.ramenCup,0,0.048,0); cup.rotation.z=Math.PI/2; g.add(cup); const band=mesh(tpGeo('rBand',()=>new THREE.CylinderGeometry(0.0492,0.0452,0.032,16)),M.red,0.012,0.048,0); band.rotation.z=Math.PI/2; g.add(band); }
+  else if(t==='cola'){ const b=mesh(tpGeo('cBody',()=>new THREE.CylinderGeometry(0.045,0.043,0.2,14)),M.colaBottle,0,0.045,0); b.rotation.z=Math.PI/2; g.add(b); const l=mesh(tpGeo('cLabel',()=>new THREE.CylinderGeometry(0.0458,0.0458,0.065,14)),M.colaLabel,0,0.045,0); l.rotation.z=Math.PI/2; g.add(l);
+    const n=mesh(tpGeo('cNeck',()=>new THREE.CylinderGeometry(0.017,0.045,0.045,12)),M.colaBottle,-0.1225,0.045,0); n.rotation.z=Math.PI/2; g.add(n); const c=mesh(tpGeo('cCap',()=>new THREE.CylinderGeometry(0.018,0.018,0.022,10)),M.colaCap,-0.156,0.045,0); c.rotation.z=Math.PI/2; g.add(c); }
+  else if(t==='burger'){ g.add(mesh(tpGeo('bBag',()=>roundedBox(0.19,0.046,0.14,0.02,2)),M.paperBag,0,0,0)); g.add(mesh(tpGeo('bReceipt',()=>new THREE.BoxGeometry(0.06,0.004,0.07)),M.receipt,0.05,0.048,0.02)); }
+  else if(t==='pizza'){ const B=PIZZA_BOX_H; g.add(mesh(tpGeo('pBox',()=>roundedBox(0.34,B,0.34,0.005,1)),M.box,0,0,0)); const top=new THREE.Mesh(tpGeo('pTop',()=>new THREE.PlaneGeometry(0.33,0.33)),TP_MAT.pizzaTop||M.box); top.rotation.x=-Math.PI/2; top.position.y=B+0.0005; top.castShadow=false; top.receiveShadow=true; g.add(top); }
+  else if(t==='chicken'){ const B=CHICKEN_BOX_H; g.add(mesh(tpGeo('hBox',()=>roundedBox(0.24,B,0.18,0.006,1)),M.box,0,0,0)); g.add(mesh(tpGeo('hBand',()=>new THREE.BoxGeometry(0.075,0.002,0.182)),M.red,0.03,B+0.0005,0)); g.add(mesh(tpGeo('hLabel',()=>new THREE.BoxGeometry(0.05,0.002,0.04)),M.white,-0.065,B+0.0008,0.04)); }
+  else { g.add(mesh(tpGeo('wBowl',()=>new THREE.CylinderGeometry(0.095,0.075,0.05,18)),TP_MAT.bowl||M.black,0,0.025,0)); if(TP_MAT.lid) g.add(mesh(tpGeo('wLid',()=>new THREE.CylinderGeometry(0.098,0.098,0.01,18)),TP_MAT.lid,0.01,0.055,0.006)); }
   return g; }
-function buildTrashPile(){ const n=trashCount(); if(n===TP.n&&(n===0||TP.g.children.length)) return;
+// The heap is drawn as one mesh per material. Growing it during play (a piece pushed off the floor onto the heap)
+// used to rebuild every item from scratch — 20-70 ms on a desktop, several times that on a phone — so now only the
+// new pieces are baked and appended; the whole heap is re-baked into a single set at night, when the room is dark.
+function buildTrashPile(full){ const n=trashCount(); if(n===TP.n&&(n===0||TP.g.children.length)) return;
+  const incremental=!full&&n>TP.n&&TP.n>0&&TP.g.children.length&&n-TP.n<=24;
+  if(incremental){ const add=new THREE.Group(); for(let i=TP.n;i<n;i++) add.add(tpItem(TP.slots[i])); bakeGroup(add); for(const c of add.children.slice()) if(c.isMesh) TP.g.add(c); TP.n=n; return; }
   for(const c of TP.g.children.slice()){ TP.g.remove(c); disposeRetryVisual(c,false); }
   TP.n=n; if(!n) return;
   for(let i=0;i<n;i++) TP.g.add(tpItem(TP.slots[i]));
@@ -4538,7 +4643,7 @@ function updPlay(dt){
   syncUltimateCharge();
   if(G.tear>=1){ G.tear=1; startCry(); return; }
   if(allSpawned()){
-    const alive=EN.list.filter(e=>e.alive&&e.state!=='leave').length;
+    let alive=0; for(const e of EN.list) if(e.alive&&e.state!=='leave'){ alive=1; break; }
     if(alive===0&&projs.length===0){ startHush(); }
     else G.stallT=0;
   }
@@ -5159,9 +5264,9 @@ function queueTearGain(amount){
   tearGain.classList.remove('on'); void tearGain.offsetWidth; tearGain.classList.add('on');
 }
 function updateTearMeter(dt){
-  const k=clamp(G.tear,0,1), pct=k>=1?100:Math.floor(k*100);
-  tearFill.style.transform=`scaleX(${k})`; tearValue.textContent=pct+'/100';
-  tearMeter.setAttribute('aria-valuenow',String(pct));
+  const k=clamp(G.tear,0,1), pct=k>=1?100:Math.floor(k*100), kq=Math.round(k*400)/400;
+  if(TEAR_UI.kq!==kq){ TEAR_UI.kq=kq; tearFill.style.transform=`scaleX(${kq})`; }
+  if(TEAR_UI.pct!==pct){ TEAR_UI.pct=pct; tearValue.textContent=pct+'/100'; tearMeter.setAttribute('aria-valuenow',String(pct)); }
   tearMeter.classList.toggle('warn',k>=.6&&k<.8);
   tearMeter.classList.toggle('danger',k>=.8&&k<.93);
   tearMeter.classList.toggle('critical',k>=.93);
@@ -5193,76 +5298,97 @@ function hint(){}
 function setSelected(id,force=false){ selected=!force&&id&&selected===id?null:id; updateBar(); }
 function projectTo(x,y,z,out){ tmpV.set(x,y,z).project(camera); out.x=(tmpV.x*0.5+0.5)*window.innerWidth; out.y=(-tmpV.y*0.5+0.5)*window.innerHeight; out.z=tmpV.z; return out; }
 const scr={x:0,y:0,z:0};
+// Sizes of fixed UI pieces are read at most twice a second (and on resize): reading offsetWidth after the labels have
+// been written forces the browser to lay the page out again, every frame.
+const UIM={t:0,tearW:112,tearH:29,barTop:0,hudBottom:FRAME_TOP_PX,loanW:96};
+function measureUI(force){ UIM.t-=1; if(!force&&UIM.t>0) return; UIM.t=30;
+  UIM.tearW=tearMeter.offsetWidth||UIM.tearW; UIM.tearH=tearMeter.offsetHeight||UIM.tearH; UIM.barTop=barTopPx(); UIM.hudBottom=hudBottomPx(); UIM.loanW=loanWrap.offsetWidth||UIM.loanW; }
+window.addEventListener('resize',()=>measureUI(true));
 function positionTearMeter(){
   const show=G.scene==='play'&&!SELF_HIT.active;
   tearMeter.classList.toggle('on',show);
   if(!show) return;
   projectTo(HEADW.c.x,HEADW.c.y+HEADW.r.y*.72,HEADW.c.z-HEADW.r.z*.69,scr);
   if(scr.z<-1||scr.z>1){ tearMeter.classList.remove('on'); return; }
-  const bw=tearMeter.offsetWidth||112, bh=tearMeter.offsetHeight||29;
-  const bx=clamp(scr.x,12+bw/2,window.innerWidth-12-bw/2);
-  const by=clamp(scr.y-7,bh+12,Math.max(bh+12,barTopPx()-12));
-  tearMeter.style.left=bx+'px'; tearMeter.style.top=by+'px';
-  tearMeter.style.setProperty('--tail',clamp(scr.x-bx+bw/2,8,bw-8)+'px');
+  const bw=UIM.tearW, bh=UIM.tearH;
+  const bx=Math.round(clamp(scr.x,12+bw/2,window.innerWidth-12-bw/2));
+  const by=Math.round(clamp(scr.y-7,bh+12,Math.max(bh+12,UIM.barTop-12)));
+  if(UIM.tearX!==bx||UIM.tearY!==by){ UIM.tearX=bx; UIM.tearY=by; tearMeter.style.left=bx+'px'; tearMeter.style.top=by+'px'; tearMeter.style.setProperty('--tail',clamp(Math.round(scr.x)-bx+bw/2,8,bw-8)+'px'); }
 }
 const loanWrap=$('loanWrap'), loanBtn=$('loanBtn'), loanChoices=$('loanChoices'), loanRemaining=$('loanRemaining'), loanLimit=$('loanLimit'), loanLimitFill=$('loanLimitFill'); let loanOpen=false;
 function setLoanOpen(on){
-  loanOpen=!!on&&phoneLit()&&loanAvailable()>=MIN_LOAN_DRAW&&!gamePaused;
+  const next=!!on&&phoneLit()&&loanAvailable()>=MIN_LOAN_DRAW&&!gamePaused;
+  if(next===loanOpen&&UIM.loanOpenApplied) return;
+  loanOpen=next; UIM.loanOpenApplied=true;
   loanWrap.classList.toggle('open',loanOpen);
   loanBtn.setAttribute('aria-expanded',String(loanOpen));
   loanChoices.setAttribute('aria-hidden',String(!loanOpen));
 }
+// Rewritten only when something in it changed; the texts and buttons used to be re-set every frame.
+let loanUISig='';
 function updateLoanUI(){
   const show=phoneLit()&&!SELF_HIT.active&&!gamePaused, available=loanAvailable(), canDraw=available>=MIN_LOAN_DRAW;
-  const short=available>=10000?Math.floor(available/10000)+'만 원':won(available);
-  loanBtn.querySelector('.ln1').textContent=canDraw?'대출':'대출 불가';
-  loanBtn.querySelector('.ln2').textContent=canDraw?'잔여 '+short:(available>0?'잔여 '+short:'한도 소진');
-  loanBtn.disabled=!canDraw; loanBtn.setAttribute('aria-disabled',String(!canDraw));
-  loanBtn.setAttribute('aria-label',canDraw?'대출 금액 선택, 잔여 한도 '+won(available):'대출 불가, 최소 대출 금액 '+won(MIN_LOAN_DRAW));
-  loanRemaining.textContent=won(available);
-  const limitRatio=CFG.LOAN_LIMIT>0?clamp(available/CFG.LOAN_LIMIT,0,1):0;
-  loanLimitFill.style.width=(limitRatio*100)+'%';
-  loanLimit.setAttribute('aria-valuemax',String(CFG.LOAN_LIMIT));
-  loanLimit.setAttribute('aria-valuenow',String(available));
-  loanLimit.setAttribute('aria-valuetext',won(available));
-  loanChoices.querySelectorAll('[data-loan]').forEach(btn=>{
-    const amount=Number(btn.dataset.loan), disabled=amount>available;
-    btn.textContent=(amount/10000)+'만 원';
-    btn.disabled=disabled; btn.setAttribute('aria-disabled',String(disabled));
-    btn.setAttribute('aria-label',won(amount)+' 대출');
-  });
+  const textSig=available+'|'+canDraw+'|'+(G.money>=CHEAPEST_FOOD);
+  if(textSig!==loanUISig){ loanUISig=textSig;
+    const short=available>=10000?Math.floor(available/10000)+'만 원':won(available);
+    loanBtn.querySelector('.ln1').textContent=canDraw?'대출':'대출 불가';
+    loanBtn.querySelector('.ln2').textContent=canDraw?'잔여 '+short:(available>0?'잔여 '+short:'한도 소진');
+    loanBtn.disabled=!canDraw; loanBtn.setAttribute('aria-disabled',String(!canDraw));
+    loanBtn.setAttribute('aria-label',canDraw?'대출 금액 선택, 잔여 한도 '+won(available):'대출 불가, 최소 대출 금액 '+won(MIN_LOAN_DRAW));
+    loanRemaining.textContent=won(available);
+    const limitRatio=CFG.LOAN_LIMIT>0?clamp(available/CFG.LOAN_LIMIT,0,1):0;
+    loanLimitFill.style.width=(limitRatio*100)+'%';
+    loanLimit.setAttribute('aria-valuemax',String(CFG.LOAN_LIMIT));
+    loanLimit.setAttribute('aria-valuenow',String(available));
+    loanLimit.setAttribute('aria-valuetext',won(available));
+    loanChoices.querySelectorAll('[data-loan]').forEach(btn=>{
+      const amount=Number(btn.dataset.loan), disabled=amount>available;
+      btn.textContent=(amount/10000)+'만 원';
+      btn.disabled=disabled; btn.setAttribute('aria-disabled',String(disabled));
+      btn.setAttribute('aria-label',won(amount)+' 대출');
+    });
+    // the full two-line bubble only when it's urgent (not even the cheapest food) or there's nothing left to borrow
+    loanWrap.classList.toggle('mini',canDraw&&G.money>=CHEAPEST_FOOD);
+    UIM.loanW=loanWrap.offsetWidth||UIM.loanW; UIM.loanX=undefined;
+  }
   if(!canDraw) setLoanOpen(false);
-  // the full two-line bubble only when it's urgent (not even the cheapest food) or there's nothing left to borrow
-  loanWrap.classList.toggle('mini',canDraw&&G.money>=CHEAPEST_FOOD);
-  if(!show){ loanWrap.classList.remove('on'); setLoanOpen(false); loanWrap.setAttribute('aria-hidden','true'); return; }
+  const hide=()=>{ if(UIM.loanOn!==false){ UIM.loanOn=false; loanWrap.classList.remove('on'); loanWrap.setAttribute('aria-hidden','true'); } setLoanOpen(false); };
+  if(!show){ hide(); return; }
   projectTo(PHONE.x,0.16,PHONE.z,scr);
-  if(scr.z<-1||scr.z>1){ loanWrap.classList.remove('on'); setLoanOpen(false); loanWrap.setAttribute('aria-hidden','true'); return; }
-  const half=loanOpen?106:60, bw=loanWrap.offsetWidth||96, bx=clamp(scr.x,half,window.innerWidth-half);
-  loanWrap.classList.add('on'); loanWrap.setAttribute('aria-hidden','false');
-  loanWrap.style.left=bx+'px'; loanWrap.style.top=(scr.y-10)+'px';
-  loanWrap.style.setProperty('--tail',clamp(scr.x-bx+bw/2,10,bw-10)+'px');
+  if(scr.z<-1||scr.z>1){ hide(); return; }
+  const half=loanOpen?106:60, bw=UIM.loanW, bx=Math.round(clamp(scr.x,half,window.innerWidth-half)), by=Math.round(scr.y-10);
+  if(UIM.loanOn!==true){ UIM.loanOn=true; loanWrap.classList.add('on'); loanWrap.setAttribute('aria-hidden','false'); }
+  if(UIM.loanX!==bx||UIM.loanY!==by){ UIM.loanX=bx; UIM.loanY=by; loanWrap.style.left=bx+'px'; loanWrap.style.top=by+'px'; loanWrap.style.setProperty('--tail',clamp(Math.round(scr.x)-bx+bw/2,10,bw-10)+'px'); }
 }
 loanBtn.addEventListener('pointerdown',ev=>{ ev.stopPropagation(); ev.preventDefault(); if(gamePaused||!phoneLit()||loanAvailable()<MIN_LOAN_DRAW) return; audioInit(); SFX.click(); setLoanOpen(!loanOpen); });
 loanChoices.querySelectorAll('[data-loan]').forEach(btn=>btn.addEventListener('pointerdown',ev=>{ ev.stopPropagation(); ev.preventDefault(); if(gamePaused||btn.disabled) return; takeLoan(Number(btn.dataset.loan)); }));
+// The DOM is only touched when a badge's text or place actually changes: with thirty fries down and the fries card
+// selected, rewriting thirty labels every frame kept the browser re-laying out the page sixty times a second.
+function badgeHide(b){ if(b._shown!==false){ b.style.display='none'; b._shown=false; } }
+const badgeCands=[], badgeUsed=[];
 function updateBadges(){
-  const candidates=[];
+  const candidates=badgeCands; candidates.length=0;
   for(const t of towers){
     if(!t.badge){ t.badge=document.createElement('div'); t.badge.className='badge ammoBadge'; labelsEl.appendChild(t.badge); }
     const b=t.badge;
-    if(G.scene!=='play'||t.ammo<=0){ b.style.display='none'; continue; }
+    if(G.scene!=='play'||t.ammo<=0){ badgeHide(b); continue; }
     const low=t.food.ammo>1&&t.ammo<=Math.max(1,Math.ceil(t.food.ammo*.25));
-    if(!low&&t.badgeT<=0&&selected!==t.food.id){ b.style.display='none'; continue; }
-    b.textContent='×'+t.ammo;
-    b.classList.toggle('low',low);
-    projectTo(t.x,towerPos(t).y+t.badgeY,t.z,scr);
-    if(scr.z>1||scr.y<0||scr.y>window.innerHeight){ b.style.display='none'; continue; }
-    candidates.push({t,b,x:scr.x,y:scr.y,low});
+    if(!low&&t.badgeT<=0&&selected!==t.food.id){ badgeHide(b); continue; }
+    projectTo(t.x,(t.baseY===undefined?groundY(t.x,t.z):t.baseY)+t.badgeY,t.z,scr);
+    if(scr.z>1||scr.y<0||scr.y>window.innerHeight){ badgeHide(b); continue; }
+    const c=t._cand||(t._cand={t,b:null,x:0,y:0,low:false}); c.b=b; c.x=Math.round(scr.x); c.y=Math.round(scr.y); c.low=low; candidates.push(c);
   }
   candidates.sort((a,b)=>(b.low-a.low)||(b.t.badgeT-a.t.badgeT));
-  const used=[];
+  const used=badgeUsed; used.length=0;
   for(const c of candidates){
-    if(used.some(p=>Math.abs(p.x-c.x)<42&&Math.abs(p.y-c.y)<27)){ c.b.style.display='none'; continue; }
-    c.b.style.display=''; c.b.style.left=c.x+'px'; c.b.style.top=c.y+'px'; used.push(c);
+    let hit=false; for(const p of used){ if(Math.abs(p.x-c.x)<42&&Math.abs(p.y-c.y)<27){ hit=true; break; } }
+    if(hit){ badgeHide(c.b); continue; }
+    const b=c.b;
+    if(b._ammo!==c.t.ammo){ b._ammo=c.t.ammo; b.textContent='×'+c.t.ammo; }
+    if(b._low!==c.low){ b._low=c.low; b.classList.toggle('low',c.low); }
+    if(b._x!==c.x||b._y!==c.y){ b._x=c.x; b._y=c.y; b.style.left=c.x+'px'; b.style.top=c.y+'px'; }
+    if(b._shown!==true){ b.style.display=''; b._shown=true; }
+    used.push(c);
   }
   const danger=DANGER.level===3&&G.scene==='play'?EN.list.filter(e=>e.alive&&!e.dead&&e.state!=='enter'&&e.state!=='leave').sort((a,b)=>headDist(a)-headDist(b))[0]:null;
   if(danger){ projectTo(danger.x,danger.y+.25,danger.z,scr); dangerBadge.style.display=''; dangerBadge.style.left=scr.x+'px'; dangerBadge.style.top=scr.y+'px'; }
@@ -5390,7 +5516,7 @@ function clearBubbles(hard=false){
 }
 
 function updateBubbles(dt){
-  const placed=[], hudBottom=bubbles.length?hudBottomPx():0;
+  const placed=[], hudBottom=bubbles.length?UIM.hudBottom:0;
   for(let i=bubbles.length-1;i>=0;i--){
     const b=bubbles[i];
 
@@ -5410,16 +5536,19 @@ function updateBubbles(dt){
       continue;
     }
 
+    let typedMore=false;
     while(
       b.next<b.steps.length&&
       b.steps[b.next].t<=b.age
     ){
-      b.typed.textContent+=b.steps[b.next++].ch;
+      b.typed.textContent+=b.steps[b.next++].ch; typedMore=true;
     }
 
     projectTo(b.e.x,b.e.y+.2,b.e.z,scr);
 
-    const bw=b.el.offsetWidth, bh=b.el.offsetHeight;
+    // the box is only measured while it is still growing with its text
+    if(typedMore||!b.bw){ b.bw=b.el.offsetWidth; b.bh=b.el.offsetHeight; }
+    const bw=b.bw, bh=b.bh;
     const wantedX=scr.x, wantedBottom=scr.y-8;
     const sx=k=>clamp(wantedX+bw*k,12+bw/2,window.innerWidth-12-bw/2);
     const overlap=(x,y,r)=>x-bw/2<r.right&&x+bw/2>r.left&&y-bh<r.bottom&&y>r.top;
@@ -5814,12 +5943,12 @@ function render(now,dt=1/60){
   // out of breath after the ultimate: the chest heaves for a few seconds
   if(GI.pant>0){ GI.pant=Math.max(0,GI.pant-dt*0.3); const b=Math.sin(G.time*8.8)*0.045*GI.pant; GI.belly.scale.y=(0.75+0.5*GI.fat)*(1+b); GI.torso.scale.z=(0.78+0.8*GI.fat)*(1+b*0.7); if(GI.pant===0){ GI.belly.scale.y=0.75+0.5*GI.fat; GI.torso.scale.z=0.78+0.8*GI.fat; } }
   eyeTick++; if(eyeTick%2===0||G.scene==='cry'||SELF_HIT.active){ const sf=GI.selfHitFace; const st={tear:G.scene==='cry'||G.scene==='over'?1:Math.max(G.tear,sf.tear||0),blink:0,flinch:sf.flinch||0,squeeze:sf.squeeze||0,red:Math.max(sf.red||0,DANGER.level*.16),flush:sf.flush||0,fat:Math.min(1,G.fat),dark:Math.min(1,G.stain/2.2),t:G.time,wob:Math.max(G.gnawPulse,(G.scene==='cry'||G.tear>0.85)?1:0,SELF_HIT.active?0.45:0),rage:sf.rage||0,impact:sf.impact,hitSide:sf.side,woe:sf.woe||0,wide:sf.wide||0}; for(const E of GI.eyes) drawEye(E,st); }
-  if(floorDirty){ floorDirtyT+=dt; if(floorDirtyT>0.2){ floorTex.needsUpdate=true; floorDirty=false; floorDirtyT=0; } }
-  if(hudDirty) updateHUD(); updateBadges(); updateLoanUI(); updatePauseButton(); positionTearMeter(); updateBubbles(dt); updWatchBubble();
+  if(floorDirty){ floorDirtyT+=dt; if(floorDirtyT>0.2){ floorFlush(); floorDirty=false; floorDirtyT=0; } }
+  measureUI(); if(hudDirty) updateHUD(); updateBadges(); updateLoanUI(); updatePauseButton(); positionTearMeter(); updateBubbles(dt); updWatchBubble();
   GI.headG.updateWorldMatrix(true,false); FACEMARK.u.uHeadInv.value.copy(GI.headG.matrixWorld).invert(); FACEMARK.u.uFlush.value=GI.selfHitFace.flush||0;
   renderer.render(scene,camera);
 }
-function frame(now){ if(renderLost) return; const dt=Math.min(0.05,(now-last)/1000); last=now; if(!gamePaused) step(dt); render(now,gamePaused?0:dt); requestAnimationFrame(frame); }
+function frame(now){ if(renderLost) return; perfFrame(now-last); const dt=Math.min(0.05,(now-last)/1000); last=now; if(!gamePaused) step(dt); render(now,gamePaused?0:dt); requestAnimationFrame(frame); }
 function mergeStatic(roots,into){
   const isDyn=o=>{ for(let a=o;a;a=a.parent) if(a.userData&&a.userData.dyn) return true; return false; };
   const buckets=new Map(), gone=[];
@@ -5839,7 +5968,19 @@ function mergeStatic(roots,into){
 }
 async function boot(){
   mergeStatic([roomG],ROOM_M); mergeStatic([furn],FURN_M); mergeStatic([furnTrash],PROPS_M);
-  paintFloorBase(); FF.rebuild(towers); buildBar(); updHeadW(); new ResizeObserver(()=>layoutCamera()).observe(barEl); updateHUD(); showBar(false); try{ renderer.compile(scene,camera); }catch(e){}
+  paintFloorBase(); FF.rebuild(towers); buildBar(); updHeadW(); new ResizeObserver(()=>layoutCamera()).observe(barEl); updateHUD(); showBar(false);
+  // Warm-up: every food, package, projectile, heap piece and mould piece is in the scene for the one compile pass, so no
+  // shader gets built in the middle of a day (the first fries, the first pizza... each used to cost a freeze on phones).
+  try{
+    const warm=new THREE.Group(); warm.position.set(0,-6,0);
+    for(const f of FOODS){ warm.add(buildFood(f.id,true)); warm.add(buildFood(f.id,false)); }
+    warm.add(kimbapMesh(0.55),fryMesh(),burgerMesh(1),pizzaSliceMesh(),chickenMesh(1),makeFruitFly());
+    for(const t of TP_TYPES) warm.add(tpItem({type:t,x:0,y:0,z:0,yaw:0,tx:0,tz:0}));
+    for(const m of fuzzMats) warm.add(new THREE.Mesh(fuzzGeo,m));
+    warm.add(new THREE.Mesh(fuzzGeo,shroomCap),new THREE.Mesh(fuzzGeo,shroomStem));
+    scene.add(warm); renderer.compile(scene,camera); scene.remove(warm);
+    const shared=new Set([...TP_GEO.values(),fuzzGeo,flyGeo,flyWingGeo]); warm.traverse(o=>{ if(o.isMesh&&o.geometry&&!shared.has(o.geometry)) o.geometry.dispose(); });
+  }catch(e){ try{ renderer.compile(scene,camera); }catch(e2){} }
   buildSquashSprites();
   try{ await Promise.race([Promise.all([document.fonts.load("900 20px 'Noto Sans KR'"),document.fonts.load("20px 'Black Han Sans'","자기연민디펜스")]), new Promise(r=>setTimeout(r,1500))]); }catch(e){}
   setThumbs();
